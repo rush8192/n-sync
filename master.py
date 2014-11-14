@@ -126,7 +126,7 @@ def main(argv):
     on_replica = 0
     print "global start target: " + str(start_time) + " delay buffer:" + str(delay_buffer)
     for ip in IP_ADDR:
-        local_start = start_time# + int(clock_difference_by_ip[ip][0]) #+ on_replica*ARTIFICIAL_DELAY
+        local_start = start_time + int(clock_difference_by_ip[ip][0]) #+ on_replica*ARTIFICIAL_DELAY
         print "ip:" + ip + " diff:" + str(int(clock_difference_by_ip[ip][0])) + " start:" + str(local_start)
         
         # each rpc runs on its own thread

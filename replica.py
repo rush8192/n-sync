@@ -35,7 +35,7 @@ def start_play():
     start_nanos = int(round(time.time() * 1000000))
     while (start_nanos + 400 < start_time):
         start_nanos = int(round(time.time() * 1000000))
-    pygame.mixer.music.play(1, offset/1000.0)
+    pygame.mixer.music.play(1)
     nanos = int(round(time.time() * 1000000))
     time.sleep(2) # allow mp3 thread to start
     #print str(nanos - start_nanos)
