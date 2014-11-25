@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from flask import Flask
+from flask import Flask, request, redirect, Response
 import json
 import multiprocessing
 import Queue
@@ -9,10 +9,16 @@ import sys
 import threading
 import time
 import urllib2
+import os
 
-# IPs in cohort
-# TODO: modify how this is loaded
-IP_ADDR = [ '192.168.1.138:5000', '192.168.1.244:5000', '192.168.1.197:5000' ]
+# Base music directory
+MUSIC_DIR = 'music/'
+
+# load cohort IPs from file
+REPLICA_IP_ADDRS = []
+with open("cohort.cfg", "r") as f:
+    for ip_addr in f:
+        REPLICA_IP_ADDRS.append(ip_addr.strip() + ':5000')
 
 # enable more output printing
 DEBUG = False
@@ -33,13 +39,13 @@ MUSIC_PORT = 5000 # for sending music commands to replica
 TIME_URL = '/time'
 PLAY_URL = '/play'
 STOP_URL = '/pause'
-QUEUE_URL = '/queue/'
+QUEUE_URL = '/queue'
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
 
-# get our current ip address
+# get master's current ip address
 def get_ip_addr():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect(("google.com",80))
@@ -47,16 +53,30 @@ def get_ip_addr():
     s.close()
     return ip_addr
 
-# handles receiving requests from client and passing onto music process (MasterMusicService)
+# handles receiving requests from client and passing onto music processes (MasterMusicService)
 class MasterClientListenerService(multiprocessing.Process):
     def __init__(self, ip, command_queue, status_queue):
         multiprocessing.Process.__init__(self)
         # stores outgoing commands
         self._c_queue = command_queue
-        # stores incomcing status messages
+        # stores incoming status messages
         self._status_queue = status_queue
         # my own ip address/port number
         self._ip = ip
+
+    # TODO: Assign IDs to each command instance to avoid timeout bug
+    def wait_on_master_music_service():
+        status = None
+        for i in range(0, 50):
+            try:
+                status = self._status_queue.get(False)
+                break
+            except Queue.Empty:
+                time.sleep(CLIENT_TIMEOUT / 50.0)
+        if status == None:
+            print "timeout from master"
+            status = "failure"
+        return status
 
     # TODO: modify this command to accept client request and return response to client
     # currently takes one text command in the url; passes that text command through
@@ -67,33 +87,37 @@ class MasterClientListenerService(multiprocessing.Process):
     def command(self, command_string):
         if command_string in ["play", "pause", "forward", "backward"]:
             self._c_queue.put(command_string)
-            status = None
-            for i in range(0, 50):
-                try:
-                    status = self._status_queue.get(False)
-                    break
-                except Queue.Empty:
-                    time.sleep(CLIENT_TIMEOUT / 50.0)
-            if status == None:
-                print "timeout from master"
-                status = "failure"
-            return status
-                    
+            return wait_on_master_music_service()
         else:
             return "invalid command: " + command_string
-    
-    # stub command for adding a playlist file to the queue
-    # endpoint: /queue/<file>
-    def queue(self, file):
-        self._c_queue.put("queue:" + file)
-        return "success"
+
+    # Add a song to our playlist queue
+    # endpoint: /queue/<song_hash>
+    def queue(self, song_hash):
+        if request.method == 'GET':
+            # ensure f+1 replicas have song on disk and in playlist queue
+            if os.path.exists(MUSIC_DIR + song_hash):
+                self._c_queue.put("queue:" + song_hash)
+                return wait_on_master_music_service()
+            # get the song from the client
+            else:
+                return json.dumps({'result':False})
+        else:
+            # ensure f+1 replicas have song on disk and in playlist queue
+            with open(MUSIC_DIR + song_hash, 'w') as f:
+                f.write(request.get_data())
+            self._c_queue.put("queue:" + song_hash)
+            return wait_on_master_music_service()
 
     def run(self):
         self._app = Flask(__name__)
         # register our endpoints
-        self._app.add_url_rule("/queue/<file>", "queue", self.queue)
+        self._app.add_url_rule("/queue/<song_hash>", "queue", self.queue, \
+                               methods=['GET', 'POST'])
         self._app.add_url_rule("/<command_string>", "command", self.command)
+
         #self._app.debug = True
+        self._ip = "127.0.0.1"
         self._app.run(host=self._ip, port=CLIENT_PORT)
 
 # handles play/pause/forward/backward commands received from client listener
@@ -273,17 +297,34 @@ class MasterMusicService(multiprocessing.Process):
             self._status_queue.put("success")
         elif return_status:
             self._status_queue.put("failure")
-    
-    # queue all songs in file (stub method, doesn't check for success)
-    def queue(self, queue_file):
-        with open(queue_file) as qf:
-            for line in qf.readlines():
-                song_hash = line[:-1]
-                self._song_queue.put(song_hash)
-                for ip in self._cohort:
-                    response = urllib2.urlopen('http://' + ip + QUEUE_URL + song_hash)
-                    print response.read()
-    
+
+    # queue song to cohorts/replicas
+    # TODO: Asynchronous requests
+    # TODO: Take out master's replica in roundtrip TCP to replicas
+    def queue(self, song_hash):
+        self._song_queue.put(song_hash)
+        total_responses = 0
+        song_bytes = None
+        for replica_ip in self._cohort:
+            try:
+                replica_url = 'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+                has_song_resp = urllib2.urlopen(replica_url)        
+                has_song = json.loads(response.read())['result']
+                if not has_song:
+                    if song_bytes != None:
+                        with open(MUSIC_DIR + song_hash, 'r') as f:
+                            song_bytes = f.read()
+                    req = urllib2.Request(replica_url)
+                    req.add_data(song_bytes)
+                    received_song_resp = urllib2.urlopen(req)
+                total_responses++
+            except Exception:
+                print "Replica " + replica_ip + " failed to receive song " + song_hash
+        if (2 * total_responses - 1) >= len(self._cohort):
+            self._status_queue.put("success")
+        else:
+            self._status_queue.put("failure")
+
     # main loop for music manager
     def run(self):
         self.get_initial_clock_diff()
@@ -304,7 +345,7 @@ class MasterMusicService(multiprocessing.Process):
                     self.queue(command_str.split(":")[1])
                 time.sleep(HEARTBEAT_PAUSE)
             except Queue.Empty:
-                print "HB"
+                #print "HB"
                 self.not_playing = 0
                 self.heartbeat_all()
                 time.sleep(HEARTBEAT_PAUSE)
@@ -383,5 +424,5 @@ if __name__ == "__main__":
         
     # start service that listens for client commands from above process
     # and plays music when instructed
-    music_server = MasterMusicService(IP_ADDR, song_queue, command_queue, status_queue)
+    music_server = MasterMusicService(REPLICA_IP_ADDRS, song_queue, command_queue, status_queue)
     music_server.start()

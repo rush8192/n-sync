@@ -11,6 +11,9 @@ import threading
 from flask import Flask
 from flask import request
 
+# Base music directory
+MUSIC_DIR = 'music/'
+
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
     def __init__(self, song_queue, ip_addr):
@@ -118,7 +121,7 @@ class ReplicaMusicService(multiprocessing.Process):
         
         content = request.json
         stop_time = content['stop_time']
-        # wait till appoointed stop time
+        # wait till appointed stop time
         stop_nanos = int(round(time.time() * 1000000))
         if (stop_nanos < stop_time):
             time.sleep((stop_time - stop_nanos) / 1000000.0)
