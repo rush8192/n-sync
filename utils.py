@@ -11,7 +11,8 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
   return resp
 
 def serialize_response(res):
-  return flask.jsonify(**res)
+  return json.dumps(res)
+  #return flask.jsonify(**res)
 
 def unserialize_response(res):
   return json.loads(res)

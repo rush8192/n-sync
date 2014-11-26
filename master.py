@@ -36,6 +36,7 @@ class MasterClientListenerService(multiprocessing.Process):
         if status == None:
             print "timeout from master"
             status = "failure"
+        return status
         return utils.serialize_response(status)
 
     # TODO: modify this command to accept client request and return response to client
@@ -340,20 +341,21 @@ class MasterMusicService(multiprocessing.Process):
                 return True
             time.sleep(timeout_value / 10.0)
 
-    def load_song(self, song_hash):
+    def load_song(self, params):
+        song_hash = params['song_hash']
         self.loaded_replica_ips = []
         self.loaded_acks = 0
         for replica_ip in self._replicas:
-            replica_url = 'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+            replica_url = 'http://' + replica_ip + LOAD_URL + '/' + song_hash
             r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data={})
             r.start()
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
-            self._status_queue.put('failure')
+            self._status_queue.put('failure timeout')
             return
         for replica_ip in self._replicas:
             if replica_ip in self.not_loaded_replica_ips:
                 replica_url = \
-                    'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+                    'http://' + replica_ip + LOAD_URL + "/" + song_hash
                 with open(MUSIC_DIR + song_hash, 'r') as f:
                     d = {'song_bytes': f.read()}
                 r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
@@ -490,7 +492,7 @@ if __name__ == "__main__":
         
     # start service that listens for client commands from above process
     # and plays music when instructed
-    # music_server = \
-    #   MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
-    #                      command_queue, status_queue)
-    # music_server.start()
+    music_server = \
+     MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
+                        command_queue, status_queue)
+    music_server.start()

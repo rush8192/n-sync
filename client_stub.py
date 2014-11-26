@@ -65,6 +65,8 @@ def load_song(song_path):
             print len(song_bytes)
             req.add_data(song_bytes)
             r = urllib2.urlopen(req)
+            master_response = r.read()
+            print master_response
     except Exception:
         print "Error in Uploading Song to Queue"
 

@@ -22,6 +22,7 @@ TIME_URL = '/time'
 PLAY_URL = '/play'
 STOP_URL = '/pause'
 QUEUE_URL = '/queue'
+LOAD_URL = '/load'
 
 # Commands
 HB = 'hb'
