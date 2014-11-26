@@ -23,6 +23,7 @@ PLAY_URL = '/play'
 STOP_URL = '/pause'
 QUEUE_URL = '/queue'
 LOAD_URL = '/load'
+CHECK_URL = '/check'
 
 # Commands
 HB = 'hb'
@@ -32,6 +33,8 @@ FORWARD = 'forward'
 BACKWARD = 'backward'
 ENQUEUE = 'enqueue'
 LOAD = 'load'
+CHECK = 'check'
+
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
