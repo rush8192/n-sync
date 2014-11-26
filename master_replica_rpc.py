@@ -78,6 +78,9 @@ class RPC(threading.Thread):
             self._parent.loaded_acks += 1
         else:
             self._parent.not_loaded_ips.append(response_params['ip'] + ':' + REPLICA_PORT)          
-
+    elif response_command == ENQUEUE:
+        if 'enqueued' in response_params and response_success:
+            self._parent.enqueued_acks += 1
+        
     if DEBUG:
         print "ip:" + self._ip + ":" + str(response_data)

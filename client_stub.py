@@ -1,5 +1,3 @@
-# client stub - better way to pass messages to a master using argparse
-
 import sys
 import urllib2
 import argparse
@@ -58,9 +56,8 @@ def load_song(song_path):
     url = get_url(LOAD) + "/" + song_hash
     try:
         r = urllib2.urlopen(url)
-        master_response = r.read()
-        resp = utils.unserialize_response(master_response)
-        has_file = resp['result']
+        master_response = utils.unserialize_response(r.read())
+        has_file = master_response['result']
         if not has_file:
             req = urllib2.Request(url)
             d = {'song_bytes': song_bytes}
@@ -69,7 +66,24 @@ def load_song(song_path):
             master_response = r.read()
             print master_response
     except Exception:
-        print "Error in Uploading Song to Queue"
+        print "Error in Uploading Song"
+
+def enqueue_song(song_path):
+    m = hashlib.md5()
+    assert(os.path.exists(song_path))
+    with open(song_path, 'r') as f:
+        song_bytes = f.read()
+        song_hash = hashlib.sha224(song_bytes).hexdigest()
+    url = get_url(ENQUEUE) + "/" + song_hash
+    try: 
+        r = urllib.urlopen(url)
+        master_response = utils.unserialize_response(r.read())
+        if master_response['result'] == 'success':
+            print song_path + ' has been enqueued'
+        else:
+            print song_path + ' cannot be enqueued'
+    except Exception:
+        print "Error in Enqueue Song"
 
 if __name__ == "__main__":
     if (len(sys.argv) == 1):
@@ -84,6 +98,7 @@ if __name__ == "__main__":
     parser.add_argument('-f', action='store_true', help='move to next song')
     parser.add_argument('-b', action='store_true', help='move back in queue')
     parser.add_argument('-l', type=str, default=None)
+    parser.add_argument('-q', type=str, default=None)
     args = parser.parse_args()
     if args.pl:
         play()
@@ -95,5 +110,7 @@ if __name__ == "__main__":
         backward()
     if args.l != None:
         load_song(args.l)
+    if args.q != None:
+        enqueue_song(args.q)
 
 

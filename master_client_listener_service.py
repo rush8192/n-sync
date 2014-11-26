@@ -55,22 +55,14 @@ class MasterClientListenerService(multiprocessing.Process):
     # endpoint: /queue/<song_hash>
     def enqueue_song(self, song_hash):
         command_info = {'command':ENQUEUE, 'params':{'song_hash':song_hash}}
-        if request.method == 'GET':
-            if os.path.exists(MUSIC_DIR + song_hash):
-                # verify song exists on >= f+1 replicas and in their playlist
-                # queues
-                self._command_queue.put(command_info)
-                return self.wait_on_master_music_service()
-            # song doesn't exist on master, get the song from the client
-            else:
-                return utils.serialize_response({'result':False})
-        else:
-            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
-                f.write(request.get_data())
+        if os.path.exists(MUSIC_DIR + song_hash + EXT):
             # verify song exists on >= f+1 replicas and in their playlist
             # queues
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
+        # song doesn't exist on master, get the song from the client
+        else:
+            return utils.serialize_response({'result':'failure'})
 
     # Load song into master
     # endpoint /load/<song_hash>
@@ -96,7 +88,7 @@ class MasterClientListenerService(multiprocessing.Process):
         self._app = Flask(__name__)
         # Register endpoints
         self._app.add_url_rule("/" + ENQUEUE + "/<song_hash>", "enqueue_song", \
-                                self.enqueue_song, methods=['GET', 'POST'])
+                                self.enqueue_song)
         self._app.add_url_rule("/<command>", "execute_command", \
                                 self.execute_command)
         self._app.add_url_rule("/" + LOAD + "/<song_hash>", "load_song", \
