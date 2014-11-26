@@ -93,27 +93,29 @@ class MasterClientListenerService(multiprocessing.Process):
 
     # Add a song to our playlist queue
     # endpoint: /queue/<song_hash>
-    def queue(self, song_hash):
+    def enqueue_song(self, song_hash):
         if request.method == 'GET':
-            # ensure f+1 replicas have song on disk and in playlist queue
             if os.path.exists(MUSIC_DIR + song_hash):
+                # verify song exists on >= f+1 replicas and in their playlist
+                # queues
                 self._c_queue.put("queue:" + song_hash)
                 return wait_on_master_music_service()
-            # get the song from the client
+            # song doesn't exist on master, get the song from the client
             else:
                 return json.dumps({'result':False})
         else:
-            # ensure f+1 replicas have song on disk and in playlist queue
             with open(MUSIC_DIR + song_hash, 'w') as f:
                 f.write(request.get_data())
+            # verify song exists on >= f+1 replicas and in their playlist
+            # queues
             self._c_queue.put("queue:" + song_hash)
             return wait_on_master_music_service()
 
     def run(self):
         self._app = Flask(__name__)
-        # register our endpoints
-        self._app.add_url_rule("/queue/<song_hash>", "queue", self.queue, \
-                               methods=['GET', 'POST'])
+        # Register endpoints
+        self._app.add_url_rule("/queue/<song_hash>", "enqueue_song", \
+                               self.enqueue_song, methods=['GET', 'POST'])
         self._app.add_url_rule("/<command_string>", "command", self.command)
 
         #self._app.debug = True
@@ -317,7 +319,7 @@ class MasterMusicService(multiprocessing.Process):
                     req = urllib2.Request(replica_url)
                     req.add_data(song_bytes)
                     received_song_resp = urllib2.urlopen(req)
-                total_responses++
+                total_responses += 1
             except Exception:
                 print "Replica " + replica_ip + " failed to receive song " + song_hash
         if (2 * total_responses - 1) >= len(self._cohort):

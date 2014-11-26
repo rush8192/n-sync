@@ -15,23 +15,35 @@ def get_url(command):
 
 def play():
     url = get_url("play")
-    r = urllib2.urlopen(url)
-    print r.read()            
+    try:
+        r = urllib2.urlopen(url)
+        print r.read()
+    except
+        print "Error in Playing Song"
 
 def forward():
     url = get_url("forward")
-    r = urllib2.urlopen(url)
-    print r.read()
+    try:
+        r = urllib2.urlopen(url)
+        print r.read()
+    except
+        print "Error in Forwarding Song"
 
 def backward():
     url = get_url("backward")
-    r = urllib2.urlopen(url)
-    print r.read()
+    try:
+        r = urllib2.urlopen(url)
+        print r.read()
+    except
+        print "Error in Backwarding Song"
 
-def unpause():
+def pause():
     url = get_url("pause")
-    r = urllib2.urlopen(url)
-    print r.read()
+    try:
+        r = urllib2.urlopen(url)
+        print r.read()
+    except
+        print "Error in Pausing Song"
 
 # Send song hash first, then full song if needed
 def enqueue_song(song_path):
@@ -46,7 +58,6 @@ def enqueue_song(song_path):
         master_response = r.read()
         print master_response
         has_file = json.loads(master_response, encoding='utf-8')['result']
-        print has_file
         if not has_file:
             req = urllib2.Request(url)
             print len(song_bytes)
@@ -72,7 +83,7 @@ if __name__ == "__main__":
     if args.p:
         play()
     if args.u:
-        unpause()
+        pause()
     if args.f:
         forward()
     if args.b:
