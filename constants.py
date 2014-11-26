@@ -11,7 +11,8 @@ MICROSECONDS = 1000000
 EXTRA_BUFFER = 100*1000 # 100 milliseconds
 
 CLIENT_TIMEOUT = 5 #seconds
-
+REPLICA_ACK_TIMEOUT = 1 # seconds
+REPLICA_LOAD_TIMEOUT = 10 # seconds
 # port numbers
 CLIENT_PORT = '8000' # for listening for client requests
 REPLICA_PORT = '5000' # for sending music commands to replica
@@ -29,7 +30,8 @@ PAUSE = 'pause'
 FORWARD = 'forward'
 BACKWARD = 'backward'
 ENQUEUE = 'enqueue'
-
+LOAD = 'load'
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
+

@@ -12,6 +12,7 @@ from flask import Flask
 from flask import request
 from constants import *
 import utils
+import os
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
@@ -22,7 +23,16 @@ class ReplicaMusicService(multiprocessing.Process):
         self._ip = ip_addr
         self._recovery_mode = False
         self._currently_playing = None
-    
+
+        self._song_hashes = self.initialize_song_hashes()
+
+    # may need to remove .DS_STORE etc
+    def initialize_song_hashes(self):
+        if not os.path.exist(MUSIC_DIR):
+            os.makedirs(MUSIC_DIR)
+        song_hashes = set(os.listdir(MUSIC_DIR))
+        return song_hashes
+
     # Receives a json payload with the following fields:
     # start_time
     # queue_index (should be 0 or 1 for now)
@@ -31,13 +41,17 @@ class ReplicaMusicService(multiprocessing.Process):
     #
     # route: /play (POST)
     def start_play(self):
+        content = request.get_data()
+        command_epoch = content['command_epoch']
         if self._recovery_mode:
             # f = {"failure":"replica in recovery mode"}
-            resp = utils.format_rpc_response(False, PLAY, {}, 'Replica in recovery mode')
+            resp = utils.format_rpc_response(False, PLAY, {}, \
+                                             msg='Replica in recovery mode', \
+                                             command_epoch='command_epoch')
             return utils.serialize_response(resp)
         
         # parse payload
-        content = request.json
+
         start_time = content['start_time']
         offset = 0
         if 'offset' in content:
@@ -58,7 +72,9 @@ class ReplicaMusicService(multiprocessing.Process):
         if (start_time != -1 and queue_index > self._song_queue.qsize()):
             self._recovery_mode = True
             # f = {"failure":"error: not enough items in queue"}
-            resp = utils.format_rpc_response(False, PLAY, {}, 'Not enough items in queue')
+            resp = utils.format_rpc_response(False, PLAY, {}, \
+                                             msg='Not enough items in queue', \
+                                             command_epoch='command_epoch')
             return utils.serialize_response(resp)
             
         # if index is 1, this is a forward command
@@ -76,7 +92,9 @@ class ReplicaMusicService(multiprocessing.Process):
         if (song_hash != self._currently_playing and start_time != -1):
             self._recovery_mode = True
             # f = {"failure":"error: song hash doesnt match top of queue"}
-            resp = utils.format_rpc_response(False, PLAY, {}, 'Song hash does not match top of queue')
+            resp = utils.format_rpc_response(False, PLAY, {}, \
+                                             msg='Song hash does not match top of queue', \
+                                             command_epoch='command_epoch')
             return utils.serialize_response(resp)
             
         # load file if needed
@@ -88,8 +106,8 @@ class ReplicaMusicService(multiprocessing.Process):
         # can return here if we aren't supposed to start playing
         if start_time == -1:
             print "not playing"
-            # f = {"success" : "not playing"}
-            resp = utils.format_rpc_response(True, PLAY, {})
+            resp = utils.format_rpc_response(True, PLAY, {}, \
+                                             command_epoch='command_epoch')
             return utils.serialize_response(resp)
         else:
             print "playing: " + song_hash
@@ -111,18 +129,22 @@ class ReplicaMusicService(multiprocessing.Process):
         nanos = int(round(time.time() * 1000000))
         time.sleep(0.2) # allow mp3 thread to start
 
-        resp = utils.format_rpc_response(True, PLAY, {'time': nanos})
+        resp = utils.format_rpc_response(True, PLAY, {'time': nanos}, \
+                                         command_epoch='command_epoch')
         return utils.serialize_response(resp)
         
     # stop the current song.
     # payload has the local stop time ('stop_time')
     # route: /pause (POST)
     def stop_play(self):
+        content = utils.unserialize_response(request.get_data())
+        command_epoch = content['command_epoch']
         if self._recovery_mode:
-            resp = utils.format_rpc_response(False, PAUSE, {}, 'Replica in recovery mode')
+            resp = utils.format_rpc_response(False, PAUSE, {}, \
+                                             'Replica in recovery mode', \
+                                             command_epoch=command_epoch)
             return utils.serialize_response(resp)
         
-        content = request.json
         stop_time = content['stop_time']
         # wait till appointed stop time
         stop_nanos = int(round(time.time() * 1000000))
@@ -134,7 +156,10 @@ class ReplicaMusicService(multiprocessing.Process):
         offset = pygame.mixer.music.get_pos()
         nanos = int(round(time.time() * 1000000))
         print str(offset)
-        resp = utils.format_rpc_response(True, PAUSE, {'time': nanos, 'offset': offset})
+        resp = \
+            utils.format_rpc_response(True, PAUSE, \
+                                      {'time': nanos, 'offset': offset}, \
+                                      command_epoch=command_epoch)
         return utils.serialize_response(resp)
         
     # get current time. also returns offset in current song (or -1 if not playing)
@@ -145,14 +170,43 @@ class ReplicaMusicService(multiprocessing.Process):
         offset = pygame.mixer.music.get_pos()
         if offset == -1:
             self._currently_playing = None
-        resp = utils.format_rpc_response(True, HB, {'time' : nanos, 'offset': offset })
+        resp = utils.format_rpc_response(True, HB, \
+                                         {'time' : nanos, 'offset': offset })
         return utils.serialize_response(resp)
     
     # simple method to queue a song (TODO: add acks)
     def queue_song(self, queue_file):
         self._song_queue.put(queue_file)
         return "success:" + queue_file
-      
+    
+    def load_song(self, song_hash):
+        try:
+            with open(MUSIC_DIR + song_hash, 'w') as f:
+                content = utils.unserialize_response(request.get_data())
+                command_epoch = content['command_epoch']
+                song_bytes = content['song_hash']
+                f.write(song_bytes)
+        except Exception:
+            resp = utils.format_rpc_response(False, LOAD, {}, \
+                                             msg='Error occured in writing to replica', \
+                                             command_epoch=command_epoch)
+        else:
+            self._song_hashes.update(song_hash)
+            resp = utils.format_rpc_response(True, LOAD, {'has_song': True}, \
+                                             command_epoch=command_epoch)
+        return utils.serialize_response(resp)
+
+    def check_song(self, song_hash):
+        content = utils.unserialize_response(request.get_data())
+        command_epoch = content['command_epoch']
+        if song_hash in self._song_hashes:
+            resp = utils.format_rpc_response(True, LOAD, \
+                                             {'has_song': True, 'ip': self._ip}, \
+                                             command_epoch = command_epoch)
+        else:
+            resp = utils.format_rpc_response(True, LOAD, {'ip': self._ip}, \
+                                             command_epoch = command_epoch)
+        return utils.serialize_response(resp)
     # start replica service: register routes and init music player
     def run(self):
         print "STARTING"
@@ -162,6 +216,8 @@ class ReplicaMusicService(multiprocessing.Process):
         
         # register routes and handler methods
         self._app.add_url_rule("/queue/<queue_file>", "queue_song", self.queue_song)
+        self._app.add_url_rule("/load/<song_hash>", "load_song", self.load_song, methods=['POST'])
+        self._app.add_url_rule("/check/<song_hash>", "check_song", self.check_song, methods=['POST'])
         self._app.add_url_rule("/play", "start_play", self.start_play, methods=['POST'])
         self._app.add_url_rule("/pause", "stop_play", self.stop_play, methods=['POST'])
         self._app.add_url_rule("/time", "get_time", self.get_time, methods=['POST'])

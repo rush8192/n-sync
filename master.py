@@ -73,13 +73,34 @@ class MasterClientListenerService(multiprocessing.Process):
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
 
+    # Load song into master
+    # endpoint /load/<song_hash>
+    def load_song(self, song_hash):
+        command_info = {'command':LOAD, 'params':{'song_hash':song_hash}}
+        if request.method == 'GET':
+            if os.path.exists(MUSIC_DIR + song_hash):
+                self._command_queue.put(command_info)
+                return self.wait_on_master_music_service()
+            # song doesn't exist on master, get the song from the client
+            else:
+                return utils.serialize_response({'result':False})
+        elif request.method == 'POST':
+            with open(MUSIC_DIR + song_hash, 'w') as f:
+                f.write(request.get_data())
+            self._command_queue.put(command_info)
+            return self.wait_on_master_music_service()
+        else:
+            return utils.serialize_response({'result':'Unsupported request method'})
+
     def run(self):
         self._app = Flask(__name__)
         # Register endpoints
         self._app.add_url_rule("/" + ENQUEUE + "/<song_hash>", "enqueue_song", \
-                               self.enqueue_song, methods=['GET', 'POST'])
-        self._app.add_url_rule("/<command>", "execute_command", self.execute_command)
-
+                                self.enqueue_song, methods=['GET', 'POST'])
+        self._app.add_url_rule("/<command>", "execute_command", \
+                                self.execute_command)
+        self._app.add_url_rule("/" + LOAD + "/<song_hash>", "load_song", \
+                                self.load_song, methods=['GET', 'POST'])
         #self._app.debug = True
         self._ip = "127.0.0.1"
         self._app.run(host=self._ip, port=int(CLIENT_PORT))
@@ -117,6 +138,14 @@ class MasterMusicService(multiprocessing.Process):
         self.offsets = []
         self.responses = 0
         self.not_playing = 0
+
+        # used for enqueue and load songz
+        self.enqueue_acks = 0
+        self.not_loaded_ips = []
+        self.loaded_acks = 0
+
+        # counter that distinguishes commands
+        self.command_epoch = 0
     
     # updates the running average clock diff for a given ip
     def update_clock_diff(self, ip, diff):
@@ -152,7 +181,7 @@ class MasterMusicService(multiprocessing.Process):
     def heartbeat(self, replica_ip):
         # spawn new thread, which does an http request to fetch the current timestamp
         # from a replica
-        data = utils.serialize_response({"playing" : self._playing})
+        data = {"playing" : self._playing}
         replica_url = 'http://' + replica_ip + TIME_URL
         r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data)
         r.start()
@@ -211,7 +240,8 @@ class MasterMusicService(multiprocessing.Process):
         stop_time = int(round(time.time() * MICROSECONDS)) + delay_buffer
         for ip in self._replicas:
             local_stop = stop_time + int(self._clock_difference_by_ip[ip][0])
-            r = RPC(self, PAUSE, url='http://' + ip + STOP_URL, ip=ip, data=utils.serialize_response({"stop_time":local_stop}))
+            r = RPC(self, PAUSE, url='http://' + ip + STOP_URL, \
+                    ip=ip, data={"stop_time":local_stop})
             r.start()
             
         time.sleep(float(2*delay_buffer + 2*EXTRA_BUFFER) / MICROSECONDS)
@@ -245,14 +275,17 @@ class MasterMusicService(multiprocessing.Process):
             total_max_delay += self._latency_by_ip[ip][2]            
         delay_buffer = int(2*total_max_delay)
         # global start time that all replicas must agree on
-        start_time = int(round(time.time() * MICROSECONDS)) + delay_buffer + EXTRA_BUFFER
+        start_time = \
+            int(round(time.time() * MICROSECONDS)) + delay_buffer + EXTRA_BUFFER
         for ip in self._replicas:
             local_start = start_time + int(self._clock_difference_by_ip[ip][0])
             if not start_song:
                 local_start = -1
             # each rpc runs on its own thread; send play command for local start time
-            req_data = { "song_hash" : self._current_song, "offset": self._current_offset, "queue_index":qpos, "start_time":local_start }
-            r = RPC(self, PLAY, url='http://' + ip + PLAY_URL, ip=ip, data=utils.serialize_response(req_data))
+            req_data = { "song_hash" : self._current_song, \
+                         "offset": self._current_offset, \
+                         "queue_index":qpos, "start_time":local_start }
+            r = RPC(self, PLAY, url='http://' + ip + PLAY_URL, ip=ip, data=req_data)
             r.start()
          
         # wait for a bit, then check for acks (all other responses time out)
@@ -272,7 +305,11 @@ class MasterMusicService(multiprocessing.Process):
         song_bytes = None
         for replica_ip in self._replicas:
             try:
-                replica_url = 'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+                replica_url = \
+                     'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+                r = RPC(self, PLAY, url=replica_url, \
+                        ip=replica_ip, data=utils.serialize_response({}))
+                
                 has_song_resp = urllib2.urlopen(replica_url)        
                 has_song = utils.unserialize_response(response.read())['result']
                 if not has_song:
@@ -290,6 +327,44 @@ class MasterMusicService(multiprocessing.Process):
         else:
             self._status_queue.put("failure")
 
+    def timeout(self, left_comp_flag, right_comp, timeout_value):
+        start_time = time.time()
+        while True:
+            if left_comp_flag == 'c':
+                left_comp = 2*(self.loaded_acks+len(self.not_loaded_ips))-1
+            elif left_comp_flag == 'l':
+                left_comp = 2*self.loaded_acks-1
+            if left_comp >= right_comp:
+                return False
+            if (time.time() - start_time) > timeout_value:
+                return True
+            time.sleep(timeout_value / 10.0)
+
+    def load_song(self, song_hash):
+        self.loaded_replica_ips = []
+        self.loaded_acks = 0
+        for replica_ip in self._replicas:
+            replica_url = 'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+            r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data={})
+            r.start()
+        if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
+            self._status_queue.put('failure')
+            return
+        for replica_ip in self._replicas:
+            if replica_ip in self.not_loaded_replica_ips:
+                replica_url = \
+                    'http://' + replica_ip + QUEUE_URL + "/" + song_hash
+                with open(MUSIC_DIR + song_hash, 'r') as f:
+                    d = {'song_bytes': f.read()}
+                r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
+                r.start()
+        if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):
+            self._status_queue.put('failure')
+            return
+            # should save the song_hash somewhere to indicate successful loading
+        self._status_queue.put('success')
+
+
     # main loop for music manager
     def run(self):
         self.get_initial_clock_diff()
@@ -297,6 +372,7 @@ class MasterMusicService(multiprocessing.Process):
             # check for command; either perform command or send heartbeat
             try:
                 command_info = self._command_queue.get(False)
+                self.command_epoch += 1
                 command = command_info['command']
                 params = command_info['params']
                 if command == PLAY:
@@ -309,6 +385,8 @@ class MasterMusicService(multiprocessing.Process):
                     self.backward()
                 elif command == ENQUEUE:
                     self.enqueue_song(params)
+                elif command == LOAD:
+                    self.load_song(params)
                 time.sleep(HEARTBEAT_PAUSE)
             except Queue.Empty:
                 #print "HB"
@@ -342,16 +420,24 @@ class RPC(threading.Thread):
 
   # run the rpc; time it and record response depending on RPC type string
   def run(self):
-    req = urllib2.Request(self._url, self._data, {'Content-Type': 'application/json'})
+    if self._command != HB:
+        self._data['command_epoch'] = self._parent.command_epoch
+    self._data = utils.serialize_response(self._data)
+    req = urllib2.Request(self._url, self._data, \
+                          {'Content-Type': 'application/json'})
     start = int(round(time.time() * MICROSECONDS))
     response = urllib2.urlopen(req)
     end = int(round(time.time() * MICROSECONDS))
     
     response_data = utils.unserialize_response(response)
     response_command = response_data['command']
+    if response_command != HB and \
+       response_data['command_epoch'] != self._parent.command_epoch:
+        return
     response_success = response_data['success']
     response_params = response_data['params']
     assert(response_command == self._command)
+    # Ignore timed out RPCoperations
 
     # heartbeat: update latency, diff and check for song ending
     if response_command == HB and response_success:
@@ -373,6 +459,15 @@ class RPC(threading.Thread):
         if response_offset > -1:
             # paused: record offset in song
             self._parent.offsets.append(response_offset)
+    elif response_command == LOAD and response_success:
+        if response_params['method'] == 'GET':
+            if 'has_song' in response_params:
+                self._parent.loaded_acks += 1
+            else:
+                self._parent.not_loaded_ips.append(response_params['ip'])          
+        elif response_params['method'] == 'POST':
+            if 'has_song' in response_params:
+                self._parent.loaded_acks += 1
     if DEBUG:
         print "ip:" + self._ip + ":" + str(response_data)
 
@@ -389,10 +484,13 @@ if __name__ == "__main__":
     status_queue = multiprocessing.Queue()
     playlist_queue = multiprocessing.Queue()
 
-    client_listener_service = MasterClientListenerService(ip_addr, command_queue, status_queue)
+    client_listener_service = \
+        MasterClientListenerService(ip_addr, command_queue, status_queue)
     client_listener_service.start()
         
     # start service that listens for client commands from above process
     # and plays music when instructed
-    # music_server = MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, command_queue, status_queue)
+    # music_server = \
+    #   MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
+    #                      command_queue, status_queue)
     # music_server.start()

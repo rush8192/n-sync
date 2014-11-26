@@ -2,11 +2,12 @@ import json
 import socket
 import flask 
 
-def format_rpc_response(success, command, params, msg=''):
-  resp = {'success': success, 'command': command, 'params': params}
-  if msg == '':
-    return resp
-  resp['msg'] = msg
+def format_rpc_response(success, command, params, msg='', command_epoch=None):
+  resp = {'success': success, 'command':command, 'params': params}
+  if msg != '':
+    resp['msg'] = msg
+  if command_epoch != None:
+    resp['command_epoch'] = command_epoch
   return resp
 
 def serialize_response(res):

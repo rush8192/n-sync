@@ -48,13 +48,13 @@ def pause():
         print "Error in Pausing Song"
 
 # Send song hash first, then full song if needed
-def enqueue_song(song_path):
+def load_song(song_path):
     m = hashlib.md5()
     assert(os.path.exists(song_path))
     with open(song_path, 'r') as f:
         song_bytes = f.read()
         song_hash = hashlib.sha224(song_bytes).hexdigest()
-    url = get_url(ENQUEUE) + "/" + song_hash
+    url = get_url(LOAD) + "/" + song_hash
     try:
         r = urllib2.urlopen(url)
         master_response = r.read()
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument('-pa', action='store_true', help='pause at master offset')
     parser.add_argument('-f', action='store_true', help='move to next song')
     parser.add_argument('-b', action='store_true', help='move back in queue')
-    parser.add_argument('-q', type=str, default=None)
+    parser.add_argument('-l', type=str, default=None)
     args = parser.parse_args()
     if args.pl:
         play()
@@ -90,5 +90,7 @@ if __name__ == "__main__":
         forward()
     if args.b:
         backward()
-    if args.q != None:
-        enqueue_song(args.q)
+    if args.l != None:
+        load_song(args.l)
+
+
