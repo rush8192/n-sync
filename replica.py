@@ -28,7 +28,7 @@ class ReplicaMusicService(multiprocessing.Process):
 
     # may need to remove .DS_STORE etc
     def initialize_song_hashes(self):
-        if not os.path.exist(MUSIC_DIR):
+        if not os.path.exists(MUSIC_DIR):
             os.makedirs(MUSIC_DIR)
         song_hashes = set(os.listdir(MUSIC_DIR))
         return song_hashes
@@ -191,7 +191,7 @@ class ReplicaMusicService(multiprocessing.Process):
                                              msg='Error occured in writing to replica', \
                                              command_epoch=command_epoch)
         else:
-            self._song_hashes.update(song_hash)
+            self._song_hashes.add(song_hash)
             resp = utils.format_rpc_response(True, LOAD, {'has_song': True}, \
                                              command_epoch=command_epoch)
         return utils.serialize_response(resp)
@@ -200,16 +200,18 @@ class ReplicaMusicService(multiprocessing.Process):
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         if song_hash in self._song_hashes:
-            resp = utils.format_rpc_response(True, LOAD, \
+            resp = utils.format_rpc_response(True, CHECK, \
                                              {'has_song': True, 'ip': self._ip}, \
                                              command_epoch = command_epoch)
         else:
-            resp = utils.format_rpc_response(True, LOAD, {'ip': self._ip}, \
+            resp = utils.format_rpc_response(True, CHECK, {'ip': self._ip}, \
                                              command_epoch = command_epoch)
+        print utils.serialize_response(resp)
         return utils.serialize_response(resp)
+
     # start replica service: register routes and init music player
     def run(self):
-        print "STARTING"
+        print "Starting Replica Server"
         self._app = Flask(__name__)
         # modify buffer param (larger=more latency diffs)
         pygame.mixer.init(buffer=512)
@@ -226,19 +228,10 @@ class ReplicaMusicService(multiprocessing.Process):
 
 # reads initial queue (if present) then starts replica music service
 if __name__ == "__main__":
-    song_q = multiprocessing.Queue()
-    argv = sys.argv
-    song_name = None
-    if len(argv) > 1:
-        queue_file = argv[1]
-        with open(queue_file) as qf:
-            for line in qf.readlines():
-                song_hash = line[:-1]
-                song_q.put(song_hash)
-    
+    playlist_queue = multiprocessing.Queue()    
     # start replica service
     ip_addr = utils.get_ip_addr()
-    print 'replica ip address is:' + ip_addr 
-    replica_service = ReplicaMusicService(song_q, ip_addr)
+    print 'Replica IP Address is:' + ip_addr 
+    replica_service = ReplicaMusicService(playlist_queue, ip_addr)
     replica_service.start()
     

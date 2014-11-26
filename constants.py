@@ -35,6 +35,7 @@ BACKWARD = 'backward'
 ENQUEUE = 'enqueue'
 LOAD = 'load'
 CHECK = 'check'
+
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
