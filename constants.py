@@ -1,6 +1,7 @@
 # Base music directory
 MUSIC_DIR = 'music/'
 REPLICA_IP_FILE = 'replica_ips.cfg'
+EXT = '.mp3'
 # enable more output printing
 DEBUG = False
 

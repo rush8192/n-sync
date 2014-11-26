@@ -217,13 +217,13 @@ class MasterMusicService(multiprocessing.Process):
                 replica_url = \
                      'http://' + replica_ip + QUEUE_URL + "/" + song_hash
                 r = RPC(self, PLAY, url=replica_url, \
-                        ip=replica_ip, data=utils.serialize_response({}))
+                        ip=replica_ip, data={})
                 
                 has_song_resp = urllib2.urlopen(replica_url)        
                 has_song = utils.unserialize_response(response.read())['result']
                 if not has_song:
                     if song_bytes != None:
-                        with open(MUSIC_DIR + song_hash, 'r') as f:
+                        with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
                             song_bytes = f.read()
                     req = urllib2.Request(replica_url)
                     req.add_data(song_bytes)
@@ -260,15 +260,14 @@ class MasterMusicService(multiprocessing.Process):
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
             self._status_queue.put('failure timeout')
             return
+        d = None
         for replica_ip in self._replicas:
-            print replica_ip
-            print self.not_loaded_ips
             if replica_ip in self.not_loaded_ips:
-                print replica_ip
                 replica_url = \
                     'http://' + replica_ip + LOAD_URL + "/" + song_hash
-                with codecs.open(MUSIC_DIR + song_hash, 'r', encoding='utf-8') as f:
-                    d = {'song_bytes': f.read()}
+                if d == None:
+                    with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
+                        d = {'song_bytes': f.read()}
                 r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
                 r.start()
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):

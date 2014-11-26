@@ -180,11 +180,11 @@ class ReplicaMusicService(multiprocessing.Process):
         return "success:" + queue_file
     
     def load_song(self, song_hash):
+        content = utils.unserialize_response(request.get_data())
+        command_epoch = content['command_epoch']
+        song_bytes = content['song_bytes']
         try:
-            with open(MUSIC_DIR + song_hash, 'w') as f:
-                content = utils.unserialize_response(request.get_data())
-                command_epoch = content['command_epoch']
-                song_bytes = content['song_hash']
+            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
                 f.write(song_bytes)
         except Exception:
             resp = utils.format_rpc_response(False, LOAD, {}, \

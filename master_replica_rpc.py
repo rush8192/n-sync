@@ -35,9 +35,7 @@ class RPC(threading.Thread):
     if self._command != HB:
         self._data['command_epoch'] = self._parent.command_epoch
     self._data = utils.serialize_response(self._data)
-    print self._data
-    print self._url
-    req = urllib2.Request(self._url, self._data)
+    req = urllib2.Request(self._url, self._data) 
     start = int(round(time.time() * MICROSECONDS))
     response = urllib2.urlopen(req).read()
     end = int(round(time.time() * MICROSECONDS))

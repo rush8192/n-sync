@@ -7,7 +7,7 @@ import hashlib
 import json
 import os
 from constants import *
-import codecs
+import utils
 
 MASTER_IP = "127.0.0.1" #"192.168.1.197"
 PORT = "8000"
@@ -52,19 +52,19 @@ def pause():
 def load_song(song_path):
     m = hashlib.md5()
     assert(os.path.exists(song_path))
-    with codecs.open(song_path, 'r') as f:
+    with open(song_path, 'r') as f:
         song_bytes = f.read()
         song_hash = hashlib.sha224(song_bytes).hexdigest()
     url = get_url(LOAD) + "/" + song_hash
     try:
         r = urllib2.urlopen(url)
         master_response = r.read()
-        print master_response
-        has_file = json.loads(master_response, encoding='utf-8')['result']
+        resp = utils.unserialize_response(master_response)
+        has_file = resp['result']
         if not has_file:
             req = urllib2.Request(url)
-            print len(song_bytes)
-            req.add_data(song_bytes)
+            d = {'song_bytes': song_bytes}
+            req.add_data(utils.serialize_response(d))
             r = urllib2.urlopen(req)
             master_response = r.read()
             print master_response

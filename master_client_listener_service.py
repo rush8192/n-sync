@@ -65,7 +65,7 @@ class MasterClientListenerService(multiprocessing.Process):
             else:
                 return utils.serialize_response({'result':False})
         else:
-            with open(MUSIC_DIR + song_hash, 'w') as f:
+            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
                 f.write(request.get_data())
             # verify song exists on >= f+1 replicas and in their playlist
             # queues
@@ -77,15 +77,16 @@ class MasterClientListenerService(multiprocessing.Process):
     def load_song(self, song_hash):
         command_info = {'command':LOAD, 'params':{'song_hash':song_hash}}
         if request.method == 'GET':
-            if os.path.exists(MUSIC_DIR + song_hash):
+            if os.path.exists(MUSIC_DIR + song_hash + EXT):
                 self._command_queue.put(command_info)
                 return self.wait_on_master_music_service()
             # song doesn't exist on master, get the song from the client
             else:
                 return utils.serialize_response({'result':False})
         elif request.method == 'POST':
-            with open(MUSIC_DIR + song_hash, 'w') as f:
-                f.write(request.get_data())
+            data = utils.unserialize_response(request.get_data())
+            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
+                f.write(data['song_bytes'])
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
         else:
@@ -103,3 +104,5 @@ class MasterClientListenerService(multiprocessing.Process):
         #self._app.debug = True
         self._ip = "127.0.0.1"
         self._app.run(host=self._ip, port=int(CLIENT_PORT))
+
+
