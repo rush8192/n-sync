@@ -52,7 +52,10 @@ class MasterMusicService(multiprocessing.Process):
         # used by rpcs for enqueue and load song
         self.enqueue_acks = 0
         self.not_loaded_ips = multiprocessing.Queue()
-        self.loaded_acks = multiprocessing.Queue()
+        self.not_loaded_ips_count = 0
+
+        self.loaded_ips = multiprocessing.Queue()
+        self.loaded_ips_count = 0
 
         # counter that distinguishes commands
         self.command_epoch = 0
@@ -226,9 +229,9 @@ class MasterMusicService(multiprocessing.Process):
         start_time = time.time()
         while True:
             if left_comp_flag == 'c':
-                left_comp = 2*(len(self.loaded_ips)+len(self.not_loaded_ips))-1
+                left_comp = 2*(self.loaded_ips_count+self.not_loaded_ips_count)-1
             elif left_comp_flag == 'l':
-                left_comp = 2*len(self.loaded_ips)-1
+                left_comp = 2*self.loaded_ips_count-1
             elif left_comp_flag == 'e':
                 left_comp = 2*self.enqueued_acks-1
             if left_comp >= right_comp:
@@ -257,6 +260,7 @@ class MasterMusicService(multiprocessing.Process):
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
             self._status_queue.put('failure timeout')
             return
+        d = None
         while True:
              try:
                  replica_ip = self.not_loaded_ips.get(block=False)

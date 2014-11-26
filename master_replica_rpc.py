@@ -73,11 +73,14 @@ class RPC(threading.Thread):
     elif response_command == LOAD and response_success:
         if 'has_song' in response_params:
             self._parent.loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
+            self._parent.loaded_ips_count += 1
     elif response_command == CHECK and response_success:
         if 'has_song' in response_params:
             self._parent.loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
+            self._parent.loaded_ips_count += 1
         else:
             self._parent.not_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)          
+            self._parent.not_loaded_ips_count += 1
     elif response_command == ENQUEUE:
         if 'enqueued' in response_params and response_success:
             self._parent.enqueued_acks += 1

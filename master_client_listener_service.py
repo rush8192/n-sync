@@ -33,8 +33,7 @@ class MasterClientListenerService(multiprocessing.Process):
                 time.sleep(CLIENT_TIMEOUT / 50.0)
         if status == None:
             print "timeout from master"
-            status = "failure"
-        return status
+        status = {'success': True}
         return utils.serialize_response(status)
 
     # TODO: modify this command to accept client request and return response to client
@@ -49,7 +48,7 @@ class MasterClientListenerService(multiprocessing.Process):
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
         else:
-            return utils.serialize_response({'result':False})
+            return utils.serialize_response({'success':False})
 
     # Add a song to our playlist queue
     # endpoint: /queue/<song_hash>
@@ -62,7 +61,7 @@ class MasterClientListenerService(multiprocessing.Process):
             return self.wait_on_master_music_service()
         # song doesn't exist on master, get the song from the client
         else:
-            return utils.serialize_response({'result':'failure'})
+            return utils.serialize_response({'success':'failure'})
 
     # Load song into master
     # endpoint /load/<song_hash>
@@ -74,7 +73,7 @@ class MasterClientListenerService(multiprocessing.Process):
                 return self.wait_on_master_music_service()
             # song doesn't exist on master, get the song from the client
             else:
-                return utils.serialize_response({'result':False})
+                return utils.serialize_response({'success':False})
         elif request.method == 'POST':
             data = utils.unserialize_response(request.get_data())
             with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
@@ -82,7 +81,7 @@ class MasterClientListenerService(multiprocessing.Process):
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
         else:
-            return utils.serialize_response({'result':'Unsupported request method'})
+            return utils.serialize_response({'success':'Unsupported request method'})
 
     def run(self):
         self._app = Flask(__name__)

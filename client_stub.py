@@ -56,19 +56,24 @@ def load_song(song_path):
     url = get_url(LOAD) + "/" + song_hash
     try:
         r = urllib2.urlopen(url)
-        master_response = utils.unserialize_response(r.read())
-        has_file = master_response['result']
-        if not has_file:
-            req = urllib2.Request(url)
-            d = {'song_bytes': song_bytes}
-            req.add_data(utils.serialize_response(d))
-            r = urllib2.urlopen(req)
-            master_response = r.read()
-            print master_response
     except Exception:
-        print "Error in Uploading Song"
+        print "Error in Checking Song"
+    else:
+        master_response = utils.unserialize_response(r.read())
+        has_file = master_response['success']
+        if not has_file:
+            try:
+                req = urllib2.Request(url)
+            except Exception:
+                print "Error in Uploading Song"
+            else:
+                d = {'song_bytes': song_bytes}
+                req.add_data(utils.serialize_response(d))
+                r = urllib2.urlopen(req)
+                master_response = r.read()
 
 def enqueue_song(song_path):
+    load_song(song_path)
     m = hashlib.md5()
     assert(os.path.exists(song_path))
     with open(song_path, 'r') as f:
@@ -78,7 +83,7 @@ def enqueue_song(song_path):
     try: 
         r = urllib.urlopen(url)
         master_response = utils.unserialize_response(r.read())
-        if master_response['result'] == 'success':
+        if master_response['success'] == True:
             print song_path + ' has been enqueued'
         else:
             print song_path + ' cannot be enqueued'
