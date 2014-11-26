@@ -14,6 +14,7 @@ from constants import *
 from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
 import codecs
+
 # handles play/pause/forward/backward commands received from client listener
 # process (MasterClientListenerService)
 class MasterMusicService(multiprocessing.Process):
@@ -48,10 +49,10 @@ class MasterMusicService(multiprocessing.Process):
         self.responses = 0
         self.not_playing = 0
 
-        # used for enqueue and load songz
+        # used by rpcs for enqueue and load song
         self.enqueue_acks = 0
-        self.not_loaded_ips = []
-        self.loaded_acks = 0
+        self.not_loaded_ips = multiprocessing.Queue()
+        self.loaded_acks = multiprocessing.Queue()
 
         # counter that distinguishes commands
         self.command_epoch = 0
@@ -240,19 +241,28 @@ class MasterMusicService(multiprocessing.Process):
         start_time = time.time()
         while True:
             if left_comp_flag == 'c':
-                left_comp = 2*(self.loaded_acks+len(self.not_loaded_ips))-1
+                left_comp = 2*(len(self.loaded_ips)+len(self.not_loaded_ips))-1
             elif left_comp_flag == 'l':
-                left_comp = 2*self.loaded_acks-1
+                left_comp = 2*len(self.loaded_ips)-1
             if left_comp >= right_comp:
                 return False
             if (time.time() - start_time) > timeout_value:
                 return True
             time.sleep(timeout_value / 100.0)
 
+    # Refresh parameters and empty queue as needed
+    def empty_queue(self, queue):
+        while True:
+            try:
+                queue.get(block=False)
+            except Queue.Empty:
+                break
+
     def load_song(self, params):
+        # Guaranteed RPC won't add to queue since new command_epoch
+        self.empty_queue(self.not_loaded_ips)
+        self.empty_queue(self.loaded_ips)
         song_hash = params['song_hash']
-        self.not_loaded_ips = []
-        self.loaded_acks = 0
         for replica_ip in self._replicas:
             replica_url = 'http://' + replica_ip + CHECK_URL + '/' + song_hash
             r = RPC(self, CHECK, url=replica_url, ip=replica_ip, data={})
@@ -260,17 +270,20 @@ class MasterMusicService(multiprocessing.Process):
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
             self._status_queue.put('failure timeout')
             return
-        for replica_ip in self._replicas:
-            print replica_ip
-            print self.not_loaded_ips
-            if replica_ip in self.not_loaded_ips:
+        while True:
+             try:
+                 replica_ip = self.not_loaded_ips.get(block=False)
+             except Queue.Empty:
+                 break
+             else:
                 print replica_ip
+                print self.not_loaded_ips
                 replica_url = \
                     'http://' + replica_ip + LOAD_URL + "/" + song_hash
                 with codecs.open(MUSIC_DIR + song_hash, 'r', encoding='utf-8') as f:
                     d = {'song_bytes': f.read()}
                 r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
-                r.start()
+                r.start()             
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):
             self._status_queue.put('failure')
             return

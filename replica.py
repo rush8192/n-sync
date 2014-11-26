@@ -119,14 +119,14 @@ class ReplicaMusicService(multiprocessing.Process):
             start_time = start_time - (offset_diff*1000)
         
         # wait until start time, then play
-        start_nanos = int(round(time.time() * 1000000))
+        start_nanos = int(round(time.time() * MICROSECONDS))
         while (start_nanos + 400 < start_time):
-            start_nanos = int(round(time.time() * 1000000))
+            start_nanos = int(round(time.time() * MICROSECONDS))
         if new_song:
             pygame.mixer.music.play(1)
         else:
             pygame.mixer.music.unpause()
-        nanos = int(round(time.time() * 1000000))
+        nanos = int(round(time.time() * MICROSECONDS))
         time.sleep(0.2) # allow mp3 thread to start
 
         resp = utils.format_rpc_response(True, PLAY, {'time': nanos}, \
@@ -147,14 +147,14 @@ class ReplicaMusicService(multiprocessing.Process):
         
         stop_time = content['stop_time']
         # wait till appointed stop time
-        stop_nanos = int(round(time.time() * 1000000))
+        stop_nanos = int(round(time.time() * MICROSECONDS))
         if (stop_nanos < stop_time):
-            time.sleep((stop_time - stop_nanos) / 1000000.0)
+            time.sleep((stop_time - stop_nanos) / float(MICROSECONDS))
         pygame.mixer.music.pause()
         
         # return offset from start of song
         offset = pygame.mixer.music.get_pos()
-        nanos = int(round(time.time() * 1000000))
+        nanos = int(round(time.time() * MICROSECONDS))
         print str(offset)
         resp = \
             utils.format_rpc_response(True, PAUSE, \
@@ -165,7 +165,7 @@ class ReplicaMusicService(multiprocessing.Process):
     # get current time. also returns offset in current song (or -1 if not playing)
     # route: /time (POST)
     def get_time(self):
-        nanos = int(round(time.time() * 1000000))
+        nanos = int(round(time.time() * MICROSECONDS))
         self._last_beat = nanos
         offset = pygame.mixer.music.get_pos()
         if offset == -1:
@@ -214,10 +214,10 @@ class ReplicaMusicService(multiprocessing.Process):
         print "Starting Replica Server"
         self._app = Flask(__name__)
         # modify buffer param (larger=more latency diffs)
-        pygame.mixer.init(buffer=512)
+        pygame.mixer.init(buffer=INITIAL_BUFFER_SIZE)
         
         # register routes and handler methods
-        self._app.add_url_rule("/queue/<queue_file>", "queue_song", self.queue_song)
+        self._app.add_url_rule("/enqueue/<song_hash>", "enqueue_song", self.enqueue_song, methods=['POST'])
         self._app.add_url_rule("/load/<song_hash>", "load_song", self.load_song, methods=['POST'])
         self._app.add_url_rule("/check/<song_hash>", "check_song", self.check_song, methods=['POST'])
         self._app.add_url_rule("/play", "start_play", self.start_play, methods=['POST'])

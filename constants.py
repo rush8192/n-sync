@@ -39,3 +39,6 @@ CHECK = 'check'
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
 
+# initial pygame buffer size
+INITIAL_BUFFER_SIZE = 512
+
