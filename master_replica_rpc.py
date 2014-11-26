@@ -35,12 +35,13 @@ class RPC(threading.Thread):
     if self._command != HB:
         self._data['command_epoch'] = self._parent.command_epoch
     self._data = utils.serialize_response(self._data)
-    req = urllib2.Request(self._url, self._data, \
-                          {'Content-Type': 'application/json'})
+    print self._data
+    print self._url
+    req = urllib2.Request(self._url, self._data)
     start = int(round(time.time() * MICROSECONDS))
-    response = urllib2.urlopen(req)
+    response = urllib2.urlopen(req).read()
     end = int(round(time.time() * MICROSECONDS))
-    
+
     response_data = utils.unserialize_response(response)
     response_command = response_data['command']
     if response_command != HB and \
@@ -72,13 +73,13 @@ class RPC(threading.Thread):
             # paused: record offset in song
             self._parent.offsets.append(response_offset)
     elif response_command == LOAD and response_success:
-        if response_params['method'] == 'GET':
-            if 'has_song' in response_params:
-                self._parent.loaded_acks += 1
-            else:
-                self._parent.not_loaded_ips.append(response_params['ip'])          
-        elif response_params['method'] == 'POST':
-            if 'has_song' in response_params:
-                self._parent.loaded_acks += 1
+        if 'has_song' in response_params:
+            self._parent.loaded_acks += 1
+    elif response_command == CHECK and response_success:
+        if 'has_song' in response_params:
+            self._parent.loaded_acks += 1
+        else:
+            self._parent.not_loaded_ips.append(response_params['ip'] + ':' + REPLICA_PORT)          
+
     if DEBUG:
         print "ip:" + self._ip + ":" + str(response_data)

@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from constants import *
+import codecs
 
 MASTER_IP = "127.0.0.1" #"192.168.1.197"
 PORT = "8000"
@@ -51,7 +52,7 @@ def pause():
 def load_song(song_path):
     m = hashlib.md5()
     assert(os.path.exists(song_path))
-    with open(song_path, 'r') as f:
+    with codecs.open(song_path, 'r') as f:
         song_bytes = f.read()
         song_hash = hashlib.sha224(song_bytes).hexdigest()
     url = get_url(LOAD) + "/" + song_hash

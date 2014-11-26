@@ -11,11 +11,11 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
   return resp
 
 def serialize_response(res):
-  return json.dumps(res)
+  return json.dumps(res, encoding='utf-8')
   #return flask.jsonify(**res)
 
 def unserialize_response(res):
-  return json.loads(res)
+  return json.loads(res, encoding='utf-8')
 
 def get_ip_addr():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

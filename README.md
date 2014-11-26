@@ -1,7 +1,5 @@
 TODO:
 Tuesday
-1) Make sure all interfaces are json
-2) Clean up code
 3) IDs for status_queue
 4) Replication on replica side
 5) Enqueing on replica side
