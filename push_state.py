@@ -2,23 +2,29 @@
 
 import sys
 import os
+import argparse
 
-def main(argv):
-    file_to_push = None
-    if len(argv) > 1:
-        file_to_push = argv[1]
+REPLICA_IP_FILE = 'replica_ips.cfg'
 
-    with open("cohort.cfg") as cohort_config:
-        for line in cohort_config.readlines():
-            ip_addr = line[:-1]
-            if file_to_push == None:
-                for filename in os.listdir("."):
-                    if filename[0] == '.':
-                        continue
-                    command = "scp " + filename + " pi@" + ip_addr + ":~/cs244b/" + filename
-                    os.system(command)
-            else:
-                command = "scp " + file_to_push + " pi@" + ip_addr + ":~/cs244b/" + file_to_push
-                os.system(command)
+def upload_dir(args):
+    dir_to_push = args.f
+    replica_config = args.cfg
+    assert(os.path.exists(dir_to_push))
+    assert(os.path.isdir(dir_to_push))
+    with open(replica_config) as ips:
+        for line in ips.readlines():
+            ip_addr = line.strip()
+            command = 'rsync -r --exclude \".*/\" ' + dir_to_push + \
+                      ' pi@' + ip_addr + ':~/cs244b/'
+            print command
+            os.system(command)            
 
-sys.exit(main(sys.argv))
+# python remote_pi_control -f ../nsync
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Raspberry Pi Remote Control")
+    parser.add_argument("-f", type=str, default=None)
+    parser.add_argument("-cfg", type=str, default=REPLICA_IP_FILE)
+
+    args = parser.parse_args()
+    if args.f != None:
+        upload_dir(args)
