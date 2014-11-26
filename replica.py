@@ -10,9 +10,8 @@ import sys
 import threading
 from flask import Flask
 from flask import request
-
-# Base music directory
-MUSIC_DIR = 'music/'
+from constants import *
+import utils
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
@@ -33,8 +32,9 @@ class ReplicaMusicService(multiprocessing.Process):
     # route: /play (POST)
     def start_play(self):
         if self._recovery_mode:
-            f = {"failure":"replica in recovery mode"}
-            return flask.jsonify(**f)
+            # f = {"failure":"replica in recovery mode"}
+            resp = utils.format_rpc_response(False, PLAY, {}, 'Replica in recovery mode')
+            return utils.serialize_response(resp)
         
         # parse payload
         content = request.json
@@ -57,8 +57,9 @@ class ReplicaMusicService(multiprocessing.Process):
         # make sure we have enough items in queue
         if (start_time != -1 and queue_index > self._song_queue.qsize()):
             self._recovery_mode = True
-            f = {"failure":"error: not enough items in queue"}
-            return flask.jsonify(**f)
+            # f = {"failure":"error: not enough items in queue"}
+            resp = utils.format_rpc_response(False, PLAY, {}, 'Not enough items in queue')
+            return utils.serialize_response(resp)
             
         # if index is 1, this is a forward command
         if (queue_index == 1):
@@ -74,8 +75,9 @@ class ReplicaMusicService(multiprocessing.Process):
         # check that song hash matches top of queue
         if (song_hash != self._currently_playing and start_time != -1):
             self._recovery_mode = True
-            f = {"failure":"error: song hash doesnt match top of queue"}
-            return flask.jsonify(**f)
+            # f = {"failure":"error: song hash doesnt match top of queue"}
+            resp = utils.format_rpc_response(False, PLAY, {}, 'Song hash does not match top of queue')
+            return utils.serialize_response(resp)
             
         # load file if needed
         new_song = False
@@ -86,8 +88,9 @@ class ReplicaMusicService(multiprocessing.Process):
         # can return here if we aren't supposed to start playing
         if start_time == -1:
             print "not playing"
-            f = {"success" : "not playing"}
-            return flask.jsonify(**f)
+            # f = {"success" : "not playing"}
+            resp = utils.format_rpc_response(True, PLAY, {})
+            return utils.serialize_response(resp)
         else:
             print "playing: " + song_hash
             
@@ -108,16 +111,16 @@ class ReplicaMusicService(multiprocessing.Process):
         nanos = int(round(time.time() * 1000000))
         time.sleep(0.2) # allow mp3 thread to start
 
-        f = { "success": nanos }
-        return flask.jsonify(**f)
+        resp = utils.format_rpc_response(True, PLAY, {'time': nanos})
+        return utils.serialize_response(resp)
         
     # stop the current song.
     # payload has the local stop time ('stop_time')
     # route: /pause (POST)
     def stop_play(self):
         if self._recovery_mode:
-            f = {"failure":"replica in recovery mode"}
-            return flask.jsonify(**f)
+            resp = utils.format_rpc_response(False, PAUSE, {}, 'Replica in recovery mode')
+            return utils.serialize_response(resp)
         
         content = request.json
         stop_time = content['stop_time']
@@ -131,8 +134,8 @@ class ReplicaMusicService(multiprocessing.Process):
         offset = pygame.mixer.music.get_pos()
         nanos = int(round(time.time() * 1000000))
         print str(offset)
-        f = { "time": nanos, "offset":  offset}
-        return flask.jsonify(**f)
+        resp = utils.format_rpc_response(True, PAUSE, {'time': nanos, 'offset': offset})
+        return utils.serialize_response(resp)
         
     # get current time. also returns offset in current song (or -1 if not playing)
     # route: /time (POST)
@@ -142,8 +145,8 @@ class ReplicaMusicService(multiprocessing.Process):
         offset = pygame.mixer.music.get_pos()
         if offset == -1:
             self._currently_playing = None
-        f = { "time" : nanos, "offset": offset }
-        return flask.jsonify(**f)
+        resp = utils.format_rpc_response(True, HB, {'time' : nanos, 'offset': offset })
+        return utils.serialize_response(resp)
     
     # simple method to queue a song (TODO: add acks)
     def queue_song(self, queue_file):
@@ -165,14 +168,6 @@ class ReplicaMusicService(multiprocessing.Process):
         #self._app.debug = True
         self._app.run(host=self._ip)
 
-# get out ip address
-def get_ip_addr():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("google.com",80))
-    ip_addr = s.getsockname()[0]
-    s.close()
-    return ip_addr
-
 # reads initial queue (if present) then starts replica music service
 if __name__ == "__main__":
     song_q = multiprocessing.Queue()
@@ -186,7 +181,8 @@ if __name__ == "__main__":
                 song_q.put(song_hash)
     
     # start replica service
-    ip_addr = get_ip_addr()
+    ip_addr = utils.get_ip_addr()
+    print 'replica ip address is:' + ip_addr 
     replica_service = ReplicaMusicService(song_q, ip_addr)
     replica_service.start()
     

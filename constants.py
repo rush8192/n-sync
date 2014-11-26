@@ -1,6 +1,6 @@
 # Base music directory
 MUSIC_DIR = 'music/'
-
+REPLICA_IP_FILE = 'replica_ips.cfg'
 # enable more output printing
 DEBUG = False
 
@@ -13,14 +13,22 @@ EXTRA_BUFFER = 100*1000 # 100 milliseconds
 CLIENT_TIMEOUT = 5 #seconds
 
 # port numbers
-CLIENT_PORT = 8000 # for listening for client requests
-REPLICA_PORT = 5000 # for sending music commands to replica
+CLIENT_PORT = '8000' # for listening for client requests
+REPLICA_PORT = '5000' # for sending music commands to replica
 
 # replica endpoints
 TIME_URL = '/time'
 PLAY_URL = '/play'
 STOP_URL = '/pause'
 QUEUE_URL = '/queue'
+
+# Commands
+HB = 'hb'
+PLAY = 'play'
+PAUSE = 'pause'
+FORWARD = 'forward'
+BACKWARD = 'backward'
+ENQUEUE = 'enqueue'
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12

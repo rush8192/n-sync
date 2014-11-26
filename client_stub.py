@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+from constants import *
 
 MASTER_IP = "127.0.0.1" #"192.168.1.197"
 PORT = "8000"
@@ -14,35 +15,36 @@ def get_url(command):
     return "http://" + MASTER_IP + ":" + PORT + "/" + command
 
 def play():
-    url = get_url("play")
+    url = get_url(PLAY)
     try:
         r = urllib2.urlopen(url)
         print r.read()
-    except
+    except Exception:
         print "Error in Playing Song"
 
 def forward():
-    url = get_url("forward")
+    url = get_url(FORWARD)
     try:
         r = urllib2.urlopen(url)
         print r.read()
-    except
+    except Exception:
         print "Error in Forwarding Song"
 
 def backward():
-    url = get_url("backward")
+    url = get_url(BACKWARD)
     try:
         r = urllib2.urlopen(url)
         print r.read()
-    except
+    except Exception:
         print "Error in Backwarding Song"
 
 def pause():
-    url = get_url("pause")
+    url = get_url(PAUSE)
+    print url
     try:
         r = urllib2.urlopen(url)
         print r.read()
-    except
+    except Exception:
         print "Error in Pausing Song"
 
 # Send song hash first, then full song if needed
@@ -52,7 +54,7 @@ def enqueue_song(song_path):
     with open(song_path, 'r') as f:
         song_bytes = f.read()
         song_hash = hashlib.sha224(song_bytes).hexdigest()
-    url = get_url("queue") + "/" + song_hash
+    url = get_url(ENQUEUE) + "/" + song_hash
     try:
         r = urllib2.urlopen(url)
         master_response = r.read()
@@ -74,15 +76,15 @@ if __name__ == "__main__":
         sys.exit()
 
     parser = argparse.ArgumentParser(description='Client Stub Nsync.')
-    parser.add_argument('-p', action='store_true', help='play first song')
-    parser.add_argument('-u', action='store_true', help='unpause at master offset')
+    parser.add_argument('-pl', action='store_true', help='play first song')
+    parser.add_argument('-pa', action='store_true', help='pause at master offset')
     parser.add_argument('-f', action='store_true', help='move to next song')
     parser.add_argument('-b', action='store_true', help='move back in queue')
     parser.add_argument('-q', type=str, default=None)
     args = parser.parse_args()
-    if args.p:
+    if args.pl:
         play()
-    if args.u:
+    if args.pa:
         pause()
     if args.f:
         forward()
