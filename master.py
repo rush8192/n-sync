@@ -10,48 +10,14 @@ import threading
 import time
 import urllib2
 import os
-
-# Base music directory
-MUSIC_DIR = 'music/'
+import utils
+from constants import *
 
 # load cohort IPs from file
 REPLICA_IP_ADDRS = []
 with open("cohort.cfg", "r") as f:
     for ip_addr in f:
-        REPLICA_IP_ADDRS.append(ip_addr.strip() + ':5000')
-
-# enable more output printing
-DEBUG = False
-
-MICROSECONDS = 1000000
-
-# extra buffer to add to synchronize rpcs to account for unexpected delays
-# and shitty pi CPU
-EXTRA_BUFFER = 100*1000 # 100 milliseconds
-
-CLIENT_TIMEOUT = 5 #seconds
-
-# port numbers
-CLIENT_PORT = 8000 # for listening for client requests
-MUSIC_PORT = 5000 # for sending music commands to replica
-
-# replica endpoints
-TIME_URL = '/time'
-PLAY_URL = '/play'
-STOP_URL = '/pause'
-QUEUE_URL = '/queue'
-
-# heartbeat config params
-INITIAL_CALIBRATION_PINGS = 12
-HEARTBEAT_PAUSE = 0.5
-
-# get master's current ip address
-def get_ip_addr():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("google.com",80))
-    ip_addr = s.getsockname()[0]
-    s.close()
-    return ip_addr
+        REPLICA_IP_ADDRS.append(ip_addr.strip() + ':' + REPLICA_PORT)
 
 # handles receiving requests from client and passing onto music processes (MasterMusicService)
 class MasterClientListenerService(multiprocessing.Process):
@@ -76,7 +42,7 @@ class MasterClientListenerService(multiprocessing.Process):
         if status == None:
             print "timeout from master"
             status = "failure"
-        return status
+        return utils.serialize_response(status)
 
     # TODO: modify this command to accept client request and return response to client
     # currently takes one text command in the url; passes that text command through
@@ -101,7 +67,7 @@ class MasterClientListenerService(multiprocessing.Process):
                 return wait_on_master_music_service()
             # get the song from the client
             else:
-                return json.dumps({'result':False})
+                return utils.serialize_response({'result':False})
         else:
             # ensure f+1 replicas have song on disk and in playlist queue
             with open(MUSIC_DIR + song_hash, 'w') as f:
@@ -416,7 +382,7 @@ if __name__ == "__main__":
                 song_queue.put(song_hash)
     
     # determine our IP, start client listener
-    ip_addr = get_ip_addr()
+    ip_addr = utils.get_ip_addr()
     command_queue = multiprocessing.Queue()
     status_queue = multiprocessing.Queue()
     client_listener_service = MasterClientListenerService(ip_addr, command_queue, status_queue)
