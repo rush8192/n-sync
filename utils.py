@@ -1,6 +1,7 @@
 import json
 import socket
 import flask 
+import pickle
 
 def format_rpc_response(success, command, params, msg='', command_epoch=None):
   resp = {'success': success, 'command':command, 'params': params}
@@ -11,10 +12,10 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
   return resp
 
 def serialize_response(res):
-  return json.dumps(res, encoding='utf-8')
+  return pickle.dumps(res)
 
 def unserialize_response(res):
-  return json.loads(res, encoding='utf-8')
+  return pickle.loads(res)
 
 def get_ip_addr():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

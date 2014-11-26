@@ -35,9 +35,7 @@ class RPC(threading.Thread):
     if self._command != HB:
         self._data['command_epoch'] = self._parent.command_epoch
     self._data = utils.serialize_response(self._data)
-    print self._data
-    print self._url
-    req = urllib2.Request(self._url, self._data)
+    req = urllib2.Request(self._url, self._data) 
     start = int(round(time.time() * MICROSECONDS))
     response = urllib2.urlopen(req).read()
     end = int(round(time.time() * MICROSECONDS))
@@ -80,6 +78,8 @@ class RPC(threading.Thread):
             self._parent.loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
         else:
             self._parent.not_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)          
-
+    elif response_command == ENQUEUE:
+        if 'enqueued' in response_params and response_success:
+            self._parent.enqueued_acks += 1
     if DEBUG:
         print "ip:" + self._ip + ":" + str(response_data)

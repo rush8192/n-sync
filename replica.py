@@ -175,16 +175,25 @@ class ReplicaMusicService(multiprocessing.Process):
         return utils.serialize_response(resp)
     
     # simple method to queue a song (TODO: add acks)
-    def queue_song(self, queue_file):
-        self._song_queue.put(queue_file)
-        return "success:" + queue_file
-    
+    def enqueue_song(self, song_hash):
+        content = utils.unserialize_response(request.get_data())
+        command_epoch = content['command_epoch']
+        if os.path.exists(MUSIC_DIR + song_hash + EXT):
+            self._song_queue.put(song_hash)
+            resp = utils.format_rpc_response(True, ENQUEUE, {'enqueued': True}, \
+                                             command_epoch=command_epoch)
+        else:
+            resp = utils.format_rpc_response(True, ENQUEUE, {}, \
+                                             msg='Replica does not have song', \
+                                             command_epoch=command_epoch)
+        return utils.serialize_response(resp)
+
     def load_song(self, song_hash):
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         song_bytes = content['song_bytes']
         try:
-            with open(MUSIC_DIR + song_hash, 'w') as f:
+            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
                 f.write(song_bytes)
         except Exception:
             resp = utils.format_rpc_response(False, LOAD, {}, \
@@ -217,7 +226,8 @@ class ReplicaMusicService(multiprocessing.Process):
         pygame.mixer.init(buffer=INITIAL_BUFFER_SIZE)
         
         # register routes and handler methods
-        self._app.add_url_rule("/enqueue/<song_hash>", "enqueue_song", self.enqueue_song, methods=['POST'])
+
+        self._app.add_url_rule("/enqueue/<song_hash>", "enqueue_song", self.enqueue_song)
         self._app.add_url_rule("/load/<song_hash>", "load_song", self.load_song, methods=['POST'])
         self._app.add_url_rule("/check/<song_hash>", "check_song", self.check_song, methods=['POST'])
         self._app.add_url_rule("/play", "start_play", self.start_play, methods=['POST'])

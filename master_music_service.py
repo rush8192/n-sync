@@ -210,32 +210,17 @@ class MasterMusicService(multiprocessing.Process):
     # TODO: Asynchronous requests
     # TODO: Take out master's replica in roundtrip TCP to replicas
     def enqueue_song(self, song_hash):
-        self._playlist_queue.put(song_hash)
-        total_responses = 0
-        song_bytes = None
+        song_hash = params['song_hash']
+        self.enqueued_acks = 0
         for replica_ip in self._replicas:
-            try:
-                replica_url = \
-                     'http://' + replica_ip + QUEUE_URL + "/" + song_hash
-                r = RPC(self, PLAY, url=replica_url, \
-                        ip=replica_ip, data=utils.serialize_response({}))
-                
-                has_song_resp = urllib2.urlopen(replica_url)        
-                has_song = utils.unserialize_response(response.read())['result']
-                if not has_song:
-                    if song_bytes != None:
-                        with open(MUSIC_DIR + song_hash, 'r') as f:
-                            song_bytes = f.read()
-                    req = urllib2.Request(replica_url)
-                    req.add_data(song_bytes)
-                    received_song_resp = urllib2.urlopen(req)
-                total_responses += 1
-            except Exception:
-                print "Replica " + replica_ip + " failed to receive song " + song_hash
-        if (2 * total_responses - 1) >= len(self._replicas):
-            self._status_queue.put("success")
-        else:
-            self._status_queue.put("failure")
+            replica_url = \
+                 'http://' + replica_ip + ENQUEUE_URL + "/" + song_hash
+            r = RPC(self, ENQUEUE, url=replica_url, \
+                    ip=replica_ip, data={})
+        if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
+            self._status_queue.put('failure timeout')
+            return
+        self._status_queue.put('success')          
 
     def timeout(self, left_comp_flag, right_comp, timeout_value):
         start_time = time.time()
@@ -244,6 +229,8 @@ class MasterMusicService(multiprocessing.Process):
                 left_comp = 2*(len(self.loaded_ips)+len(self.not_loaded_ips))-1
             elif left_comp_flag == 'l':
                 left_comp = 2*len(self.loaded_ips)-1
+            elif left_comp_flag == 'e':
+                left_comp = 2*self.enqueued_acks-1
             if left_comp >= right_comp:
                 return False
             if (time.time() - start_time) > timeout_value:
@@ -280,8 +267,9 @@ class MasterMusicService(multiprocessing.Process):
                 print self.not_loaded_ips
                 replica_url = \
                     'http://' + replica_ip + LOAD_URL + "/" + song_hash
-                with codecs.open(MUSIC_DIR + song_hash, 'r', encoding='utf-8') as f:
-                    d = {'song_bytes': f.read()}
+                if d == None:
+                    with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
+                        d = {'song_bytes': f.read()}
                 r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
                 r.start()             
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):

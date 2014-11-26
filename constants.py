@@ -1,6 +1,7 @@
 # Base music directory
 MUSIC_DIR = 'music/'
 REPLICA_IP_FILE = 'replica_ips.cfg'
+EXT = '.mp3'
 # enable more output printing
 DEBUG = False
 
@@ -13,6 +14,7 @@ EXTRA_BUFFER = 100*1000 # 100 milliseconds
 CLIENT_TIMEOUT = 100 #seconds
 REPLICA_ACK_TIMEOUT = 100 # seconds
 REPLICA_LOAD_TIMEOUT = 100 # seconds
+ENQUEUE_ACK_TIMEOUT = 100
 # port numbers
 CLIENT_PORT = '8000' # for listening for client requests
 REPLICA_PORT = '5000' # for sending music commands to replica
@@ -21,7 +23,7 @@ REPLICA_PORT = '5000' # for sending music commands to replica
 TIME_URL = '/time'
 PLAY_URL = '/play'
 STOP_URL = '/pause'
-QUEUE_URL = '/queue'
+ENQUEUE_URL = '/enqueue'
 LOAD_URL = '/load'
 CHECK_URL = '/check'
 
