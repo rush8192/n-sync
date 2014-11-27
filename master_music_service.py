@@ -13,6 +13,7 @@ import utils
 from constants import *
 from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
+import collections
 import codecs
 
 # handles play/pause/forward/backward commands received from client listener
@@ -49,15 +50,13 @@ class MasterMusicService(multiprocessing.Process):
         self.responses = 0
         self.not_playing = 0
 
-        # used by rpcs for enqueue and load song
+        # used by rpcs for enqueue and load song: backed by queue mutexes
         self.enqueue_acks = 0
-        self.not_loaded_ips = multiprocessing.Queue()
-        self.not_loaded_ips_count = 0
+        self.not_loaded_ips = Queue.Queue()
+        self.loaded_ips = Queue.Queue()
 
-        self.loaded_ips = multiprocessing.Queue()
-        self.loaded_ips_count = 0
-
-        # counter that distinguishes commands
+        # counter that distinguishes commands: write is atomic due to
+        # assignment and not +=
         self.command_epoch = 0
     
     # updates the running average clock diff for a given ip
@@ -116,10 +115,10 @@ class MasterMusicService(multiprocessing.Process):
         try:
             # haven't started a song yet; skip first song in queue
             if self._current_song == None:
-                self._playlist_queue.get(False)
+                self._playlist_queue.popleft()
             
             # select next song in queue to play
-            song = self._playlist_queue.get(False)
+            song = self._playlist_queue.popleft()
             self._current_song = song
         except Queue.Empty:
             # if we have no entries, we are now out of songs to play
@@ -173,7 +172,7 @@ class MasterMusicService(multiprocessing.Process):
         # if we aren't currently playing a song, de-queue the next one
         if self._current_song == None and (qpos == 0 or start_song == True):
             try:
-                song = self._playlist_queue.get(False)
+                song = self._playlist_queue.popleft()
                 self._current_song = song
                 self._current_offset = 0
             except Queue.Empty:
@@ -209,7 +208,7 @@ class MasterMusicService(multiprocessing.Process):
         elif return_status:
             self._status_queue.put("failure")
 
-    # queue song to replicass/replicas
+    # queue song to replicas/replicas
     # TODO: Asynchronous requests
     # TODO: Take out master's replica in roundtrip TCP to replicas
     def enqueue_song(self, song_hash):
@@ -223,15 +222,16 @@ class MasterMusicService(multiprocessing.Process):
         if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
             self._status_queue.put('failure timeout')
             return
+        self._playlist_queue.append(song_hash)
         self._status_queue.put('success')          
 
     def timeout(self, left_comp_flag, right_comp, timeout_value):
         start_time = time.time()
         while True:
             if left_comp_flag == 'c':
-                left_comp = 2*(self.loaded_ips_count+self.not_loaded_ips_count)-1
+                left_comp = 2*(self.loaded_ips.qsize()+self.not_loaded_ips.qsize())-1
             elif left_comp_flag == 'l':
-                left_comp = 2*self.loaded_ips_count-1
+                left_comp = 2*self.loaded_ips.qsize()-1
             elif left_comp_flag == 'e':
                 left_comp = 2*self.enqueued_acks-1
             if left_comp >= right_comp:
@@ -240,18 +240,13 @@ class MasterMusicService(multiprocessing.Process):
                 return True
             time.sleep(timeout_value / 100.0)
 
-    # Refresh parameters and empty queue as needed
-    def empty_queue(self, queue):
-        while True:
-            try:
-                queue.get(block=False)
-            except Queue.Empty:
-                break
-
     def load_song(self, params):
-        # Guaranteed RPC won't add to queue since new command_epoch
-        self.empty_queue(self.not_loaded_ips)
-        self.empty_queue(self.loaded_ips)
+        # Guaranteed RPC won't add to queue since new command_epoch prevents
+        # Holding mutexes just in case
+        with self.not_loaded_ips.mutex:
+            self.not_loaded_ips.clear()
+        with self.loaded_ips.mutex:
+            self.loaded_ips.clear()
         song_hash = params['song_hash']
         for replica_ip in self._replicas:
             replica_url = 'http://' + replica_ip + CHECK_URL + '/' + song_hash
@@ -261,25 +256,18 @@ class MasterMusicService(multiprocessing.Process):
             self._status_queue.put('failure timeout')
             return
         d = None
-        while True:
-             try:
-                 replica_ip = self.not_loaded_ips.get(block=False)
-             except Queue.Empty:
-                 break
-             else:
-                print replica_ip
-                print self.not_loaded_ips
-                replica_url = \
-                    'http://' + replica_ip + LOAD_URL + "/" + song_hash
-                if d == None:
-                    with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
-                        d = {'song_bytes': f.read()}
-                r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
-                r.start()             
+        while !self.not_loaded_ips.empty():
+            replica_ip = self.not_loaded_ips.get(block=False)
+            replica_url = \
+                'http://' + replica_ip + LOAD_URL + "/" + song_hash
+            if d == None:
+                with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
+                    d = {'song_bytes': f.read()}
+            r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
+            r.start()
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):
             self._status_queue.put('failure')
             return
-            # should save the song_hash somewhere to indicate successful loading
         self._status_queue.put('success')
 
 
@@ -290,7 +278,8 @@ class MasterMusicService(multiprocessing.Process):
             # check for command; either perform command or send heartbeat
             try:
                 command_info = self._command_queue.get(False)
-                self.command_epoch += 1
+                new_command_epoch = self.command_epoch + 1
+                self.command_epoch = new_command_epoch
                 command = command_info['command']
                 params = command_info['params']
                 if command == PLAY:

@@ -16,10 +16,10 @@ import os
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
-    def __init__(self, song_queue, ip_addr):
+    def __init__(self, playlist_queue, ip_addr):
         multiprocessing.Process.__init__(self)
         self._stop = threading.Event()
-        self._song_queue = song_queue
+        self._playlist_queue = playlist_queue
         self._ip = ip_addr
         self._recovery_mode = False
         self._currently_playing = None
@@ -62,14 +62,14 @@ class ReplicaMusicService(multiprocessing.Process):
         # not currently playing song: try to get next song if we about to start
         if (self._currently_playing == None and start_time != -1):
             try:
-                self._currently_playing = self._song_queue.get(False)
+                self._currently_playing = self._playlist_queue.popleft()
             except Queue.Empty:
                 # no next song available
                 self._currently_playing = None
             print "popped queue:" + str(self._currently_playing)
         
         # make sure we have enough items in queue
-        if (start_time != -1 and queue_index > self._song_queue.qsize()):
+        if (start_time != -1 and queue_index > len(self._playlist_queue)):
             self._recovery_mode = True
             # f = {"failure":"error: not enough items in queue"}
             resp = utils.format_rpc_response(False, PLAY, {}, \
@@ -81,7 +81,7 @@ class ReplicaMusicService(multiprocessing.Process):
         if (queue_index == 1):
             # try to skip to next song, if available
             try:
-                self._currently_playing = self._song_queue.get(False)
+                self._currently_playing = self._playlist_queue.popleft()
             except Queue.Empty:
                 # no next song available; stop playing
                 self._currently_playing = None
@@ -179,7 +179,7 @@ class ReplicaMusicService(multiprocessing.Process):
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         if os.path.exists(MUSIC_DIR + song_hash + EXT):
-            self._song_queue.put(song_hash)
+            self._playlist_queue.append(song_hash)
             resp = utils.format_rpc_response(True, ENQUEUE, {'enqueued': True}, \
                                              command_epoch=command_epoch)
         else:
@@ -201,7 +201,7 @@ class ReplicaMusicService(multiprocessing.Process):
                                              command_epoch=command_epoch)
         else:
             self._song_hashes.add(song_hash)
-            resp = utils.format_rpc_response(True, LOAD, {'has_song': True}, \
+            resp = utils.format_rpc_response(True, LOAD, {'has_song': True, 'ip':self._ip}, \
                                              command_epoch=command_epoch)
         return utils.serialize_response(resp)
 

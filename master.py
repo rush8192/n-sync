@@ -14,6 +14,8 @@ from constants import *
 from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
 from master_music_service import MasterMusicService
+import collections
+
 # main master method: set up services (music service and client listener)
 if __name__ == "__main__":
     # load replicas IPs from file
@@ -25,15 +27,15 @@ if __name__ == "__main__":
     ip_addr = utils.get_ip_addr()
     command_queue = multiprocessing.Queue()
     status_queue = multiprocessing.Queue()
-    playlist_queue = multiprocessing.Queue()
+    playlist_queue = collections.deque([])
 
     client_listener_service = \
         MasterClientListenerService(ip_addr, command_queue, status_queue)
     client_listener_service.start()
-        
+
     # start service that listens for client commands from above process
     # and plays music when instructed
     music_server = \
-     MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
+        MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
                         command_queue, status_queue)
     music_server.start()
