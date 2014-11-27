@@ -13,6 +13,8 @@ from flask import request
 from constants import *
 import utils
 import os
+import pickle
+import collections
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
@@ -28,9 +30,12 @@ class ReplicaMusicService(multiprocessing.Process):
 
     # may need to remove .DS_STORE etc
     def initialize_song_hashes(self):
+        song_hashes = set([])
         if not os.path.exists(MUSIC_DIR):
             os.makedirs(MUSIC_DIR)
-        song_hashes = set(os.listdir(MUSIC_DIR))
+        for file_name in os.listdir(MUSIC_DIR):
+            if len(file_name) >= len(EXT):
+                song_hashes.add(file_name[:-len(EXT)])
         return song_hashes
 
     # Receives a json payload with the following fields:
@@ -41,7 +46,7 @@ class ReplicaMusicService(multiprocessing.Process):
     #
     # route: /play (POST)
     def start_play(self):
-        content = request.get_data()
+        content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         if self._recovery_mode:
             # f = {"failure":"replica in recovery mode"}
@@ -51,23 +56,21 @@ class ReplicaMusicService(multiprocessing.Process):
             return utils.serialize_response(resp)
         
         # parse payload
-
         start_time = content['start_time']
         offset = 0
         if 'offset' in content:
             offset = int(content['offset'])
         queue_index = int(content['queue_index'])
         song_hash = content['song_hash']
-        
         # not currently playing song: try to get next song if we about to start
         if (self._currently_playing == None and start_time != -1):
             try:
+                print self._playlist_queue
                 self._currently_playing = self._playlist_queue.popleft()
-            except Queue.Empty:
+            except IndexError:
                 # no next song available
                 self._currently_playing = None
             print "popped queue:" + str(self._currently_playing)
-        
         # make sure we have enough items in queue
         if (start_time != -1 and queue_index > len(self._playlist_queue)):
             self._recovery_mode = True
@@ -82,11 +85,12 @@ class ReplicaMusicService(multiprocessing.Process):
             # try to skip to next song, if available
             try:
                 self._currently_playing = self._playlist_queue.popleft()
-            except Queue.Empty:
+            except IndexError:
                 # no next song available; stop playing
                 self._currently_playing = None
                 pygame.mixer.music.stop()
                 print "queue empty; stopping music"
+        print "Progress 4"
         
         # check that song hash matches top of queue
         if (song_hash != self._currently_playing and start_time != -1):
@@ -100,7 +104,7 @@ class ReplicaMusicService(multiprocessing.Process):
         # load file if needed
         new_song = False
         if (offset == 0 or queue_index == 1) and self._currently_playing != None:
-            pygame.mixer.music.load(song_hash)
+            pygame.mixer.music.load(utils.get_music_path(song_hash))
             new_song = True
             
         # can return here if we aren't supposed to start playing
@@ -178,7 +182,7 @@ class ReplicaMusicService(multiprocessing.Process):
     def enqueue_song(self, song_hash):
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
-        if os.path.exists(MUSIC_DIR + song_hash + EXT):
+        if os.path.exists(utils.get_music_path(song_hash)):
             self._playlist_queue.append(song_hash)
             resp = utils.format_rpc_response(True, ENQUEUE, {'enqueued': True}, \
                                              command_epoch=command_epoch)
@@ -186,7 +190,6 @@ class ReplicaMusicService(multiprocessing.Process):
             resp = utils.format_rpc_response(True, ENQUEUE, {}, \
                                              msg='Replica does not have song', \
                                              command_epoch=command_epoch)
-        print self._playlist_queue
         return utils.serialize_response(resp)
 
     def load_song(self, song_hash):
@@ -194,7 +197,7 @@ class ReplicaMusicService(multiprocessing.Process):
         command_epoch = content['command_epoch']
         song_bytes = content['song_bytes']
         try:
-            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
+            with open(utils.get_music_path(song_hash), 'w') as f:
                 f.write(song_bytes)
         except Exception:
             resp = utils.format_rpc_response(False, LOAD, {}, \
@@ -216,7 +219,6 @@ class ReplicaMusicService(multiprocessing.Process):
         else:
             resp = utils.format_rpc_response(True, CHECK, {'ip': self._ip}, \
                                              command_epoch = command_epoch)
-        print utils.serialize_response(resp)
         return utils.serialize_response(resp)
 
     # start replica service: register routes and init music player
@@ -228,7 +230,7 @@ class ReplicaMusicService(multiprocessing.Process):
         
         # register routes and handler methods
 
-        self._app.add_url_rule("/enqueue/<song_hash>", "enqueue_song", self.enqueue_song)
+        self._app.add_url_rule("/enqueue/<song_hash>", "enqueue_song", self.enqueue_song, methods=['POST'])
         self._app.add_url_rule("/load/<song_hash>", "load_song", self.load_song, methods=['POST'])
         self._app.add_url_rule("/check/<song_hash>", "check_song", self.check_song, methods=['POST'])
         self._app.add_url_rule("/play", "start_play", self.start_play, methods=['POST'])
@@ -239,7 +241,7 @@ class ReplicaMusicService(multiprocessing.Process):
 
 # reads initial queue (if present) then starts replica music service
 if __name__ == "__main__":
-    playlist_queue = multiprocessing.Queue()    
+    playlist_queue = collections.deque([])    
     # start replica service
     ip_addr = utils.get_ip_addr()
     print 'Replica IP Address is:' + ip_addr 

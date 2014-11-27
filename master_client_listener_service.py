@@ -67,7 +67,7 @@ class MasterClientListenerService(multiprocessing.Process):
     def enqueue_song(self, song_hash):
         self.inc_client_req_id()
         command_info = {'command':ENQUEUE, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
-        if os.path.exists(MUSIC_DIR + song_hash + EXT):
+        if os.path.exists(get_music_path(song_hash)):
             # verify song exists on >= f+1 replicas and in their playlist
             # queues
             self._command_queue.put(command_info)
@@ -82,7 +82,7 @@ class MasterClientListenerService(multiprocessing.Process):
         self.inc_client_req_id()
         command_info = {'command':LOAD, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
         if request.method == 'GET':
-            if os.path.exists(MUSIC_DIR + song_hash + EXT):
+            if os.path.exists(get_music_path(song_hash)):
                 self._command_queue.put(command_info)
                 return self.wait_on_master_music_service()
             # song doesn't exist on master, get the song from the client
@@ -90,7 +90,7 @@ class MasterClientListenerService(multiprocessing.Process):
                 return utils.serialize_response(utils.format_client_response(False, LOAD, {}, msg='Master does not have requested song'))
         elif request.method == 'POST':
             data = utils.unserialize_response(request.get_data())
-            with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
+            with open(get_music_path(song_hash), 'w') as f:
                 f.write(data['song_bytes'])
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()

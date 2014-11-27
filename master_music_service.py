@@ -269,7 +269,7 @@ class MasterMusicService(multiprocessing.Process):
             replica_url = \
                 'http://' + replica_ip + LOAD_URL + "/" + song_hash
             if d == None:
-                with open(MUSIC_DIR + song_hash + EXT, 'r') as f:
+                with open(utils.get_music_path(song_hash), 'r') as f:
                     d = {'song_bytes': f.read()}
             r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
             r.start()

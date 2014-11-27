@@ -3,6 +3,7 @@ import socket
 import flask 
 import pickle
 import hashlib
+from constants import *
 
 def format_rpc_response(success, command, params, msg='', command_epoch=None):
   resp = {'success': success, 'command':command, 'params': params}
@@ -25,6 +26,9 @@ def serialize_response(res):
 
 def unserialize_response(res):
   return pickle.loads(res)
+
+def get_music_path(song_hash):
+  return MUSIC_DIR + song_hash + EXT
 
 def get_ip_addr():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

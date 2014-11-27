@@ -1,11 +1,6 @@
 TODO:
 Wednesday
-1) Enqueing on replica side
-2) Test music playing on multiple pis
-
-3) IDs for status_queue timeout
-4) Implement locks for load/enqueue
-5) Better client response
+1) Test music playing on multiple pis
 
 6) Replica failover 
 
@@ -14,7 +9,8 @@ Kevin & Jeff
 1) Replica Failover
 
 Rush
-Make operations threadsafe, consider altering playlist queue replication protocol
+1) Make operations threadsafe, consider altering playlist queue replication protocol
+2) Make sure we're popping off playlist queue when necessary
 
 Saturday/Sunday
 Rush:
