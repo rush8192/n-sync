@@ -71,7 +71,7 @@ def load_song(song_path):
                 req.add_data(utils.serialize_response(d))
                 r = urllib2.urlopen(req)
                 master_response = utils.unserialize_response(r.read())
-    print master_response['client_req_id']
+        print master_response['client_req_id']
 
 def enqueue_song(song_path):
     load_song(song_path)
@@ -80,7 +80,6 @@ def enqueue_song(song_path):
         song_bytes = f.read()
         song_hash = utils.hash_string(song_bytes)
     url = get_url(ENQUEUE) + "/" + song_hash
-    print url
     try: 
         r = urllib2.urlopen(url)
     except Exception:
