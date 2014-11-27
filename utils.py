@@ -2,6 +2,7 @@ import json
 import socket
 import flask 
 import pickle
+import hashlib
 
 def format_rpc_response(success, command, params, msg='', command_epoch=None):
   resp = {'success': success, 'command':command, 'params': params}
@@ -31,3 +32,6 @@ def get_ip_addr():
     ip_addr = s.getsockname()[0]
     s.close()
     return ip_addr
+
+def hash_string(s):
+  return hashlib.sha224(s).hexdigest()

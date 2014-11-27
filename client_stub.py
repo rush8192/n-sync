@@ -75,11 +75,10 @@ def load_song(song_path):
 
 def enqueue_song(song_path):
     load_song(song_path)
-    m = hashlib.md5()
     assert(os.path.exists(song_path))
     with open(song_path, 'r') as f:
         song_bytes = f.read()
-        song_hash = hashlib.sha224(song_bytes).hexdigest()
+        song_hash = utils.hash_string(song_bytes)
     url = get_url(ENQUEUE) + "/" + song_hash
     try: 
         r = urllib.urlopen(url)

@@ -220,11 +220,13 @@ class MasterMusicService(multiprocessing.Process):
     def enqueue_song(self, song_hash):
         song_hash = params['song_hash']
         self.enqueued_acks = 0
+        hashed_playlist = utils.hash_string(pickle.dumps(self.playlist_queue))
+
         for replica_ip in self._replicas:
             replica_url = \
                  'http://' + replica_ip + ENQUEUE_URL + "/" + song_hash
             r = RPC(self, ENQUEUE, url=replica_url, \
-                    ip=replica_ip, data={})
+                    ip=replica_ip, data={'hashed_playlist': hashed_playlist})
         if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
             self._status_queue.put(utils.format_client_response(False, ENQUEUE, {}, msg='Timeout on enqueue song', client_req_id=self._client_req_id))
             return

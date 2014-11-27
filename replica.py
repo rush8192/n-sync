@@ -186,6 +186,7 @@ class ReplicaMusicService(multiprocessing.Process):
             resp = utils.format_rpc_response(True, ENQUEUE, {}, \
                                              msg='Replica does not have song', \
                                              command_epoch=command_epoch)
+        print self._playlist_queue
         return utils.serialize_response(resp)
 
     def load_song(self, song_hash):
