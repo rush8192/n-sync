@@ -14,7 +14,7 @@ from constants import *
 from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
 import collections
-import codecs
+import pickle
 
 # handles play/pause/forward/backward commands received from client listener
 # process (MasterClientListenerService)
@@ -218,15 +218,14 @@ class MasterMusicService(multiprocessing.Process):
     # TODO: Asynchronous requests
     # TODO: Take out master's replica in roundtrip TCP to replicas
     def enqueue_song(self, song_hash):
-        song_hash = params['song_hash']
         self.enqueued_acks = 0
-        hashed_playlist = utils.hash_string(pickle.dumps(self.playlist_queue))
-
+        hashed_playlist = utils.hash_string(pickle.dumps(self._playlist_queue))
         for replica_ip in self._replicas:
             replica_url = \
                  'http://' + replica_ip + ENQUEUE_URL + "/" + song_hash
             r = RPC(self, ENQUEUE, url=replica_url, \
                     ip=replica_ip, data={'hashed_playlist': hashed_playlist})
+            r.start()
         if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
             self._status_queue.put(utils.format_client_response(False, ENQUEUE, {}, msg='Timeout on enqueue song', client_req_id=self._client_req_id))
             return
@@ -301,7 +300,7 @@ class MasterMusicService(multiprocessing.Process):
                 elif command == BACKWARD:
                     self.backward()
                 elif command == ENQUEUE:
-                    self.enqueue_song(params)
+                    self.enqueue_song(params['song_hash'])
                 elif command == LOAD:
                     self.load_song(params)
                 time.sleep(HEARTBEAT_PAUSE)
