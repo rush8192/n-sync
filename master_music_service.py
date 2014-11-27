@@ -250,6 +250,7 @@ class MasterMusicService(multiprocessing.Process):
     def load_song(self, params):
         # Guaranteed RPC won't add to queue since new command_epoch prevents
         # Holding mutexes just in case
+        print "hi"
         with self.not_loaded_ips.mutex:
             self.not_loaded_ips.queue.clear()
         with self.loaded_ips.mutex:
