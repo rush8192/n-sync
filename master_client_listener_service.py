@@ -32,8 +32,7 @@ class MasterClientListenerService(multiprocessing.Process):
             except Queue.Empty:
                 time.sleep(CLIENT_TIMEOUT / 50.0)
         if status == None:
-            print "timeout from master"
-        status = {'success': True}
+            status = utils.format_client_response(False, TIMEOUT, {}, msg='timeout from master')
         return utils.serialize_response(status)
 
     # TODO: modify this command to accept client request and return response to client
@@ -48,7 +47,7 @@ class MasterClientListenerService(multiprocessing.Process):
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
         else:
-            return utils.serialize_response({'success':False})
+            return utils.serialize_response(utils.format_client_response(True, command, {}))
 
     # Add a song to our playlist queue
     # endpoint: /queue/<song_hash>
@@ -61,7 +60,7 @@ class MasterClientListenerService(multiprocessing.Process):
             return self.wait_on_master_music_service()
         # song doesn't exist on master, get the song from the client
         else:
-            return utils.serialize_response({'success':'failure'})
+            return utils.serialize_response(utils.format_client_response(False, ENQUEUE, {}, 'Requested song to enqueue does not exist'))
 
     # Load song into master
     # endpoint /load/<song_hash>
@@ -73,15 +72,13 @@ class MasterClientListenerService(multiprocessing.Process):
                 return self.wait_on_master_music_service()
             # song doesn't exist on master, get the song from the client
             else:
-                return utils.serialize_response({'success':False})
+                return utils.serialize_response(utils.format_client_response(False, LOAD, {}, msg='Master does not have requested song'))
         elif request.method == 'POST':
             data = utils.unserialize_response(request.get_data())
             with open(MUSIC_DIR + song_hash + EXT, 'w') as f:
                 f.write(data['song_bytes'])
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
-        else:
-            return utils.serialize_response({'success':'Unsupported request method'})
 
     def run(self):
         self._app = Flask(__name__)

@@ -129,17 +129,17 @@ class MasterMusicService(multiprocessing.Process):
         self._current_song = song
         # we are only starting the song if we are currently playing
         if self._playing:
-            self.synchronize(qpos=1, start_song=True)
+            self.synchronize(command=FORWARD, qpos=1, start_song=True)
         else:
-            self.synchronize(qpos=1, start_song=False)
+            self.synchronize(command=FORWARD, qpos=1, start_song=False)
     
     # go back to start of current song
     def backward(self):
         self._current_offset = 0
         if self._playing:
-            self.synchronize()
+            self.synchronize(command=BACKWARD)
         else:
-            self._status_queue.put("success")            
+            self._status_queue.put(utils.format_client_response(True, BACKWARD, {}))            
     
     # pause the music
     def pause(self):
@@ -165,10 +165,10 @@ class MasterMusicService(multiprocessing.Process):
         
         # currently assume success; could count number of offset responses
         self._playing = False
-        self._status_queue.put("success")
+        self._status_queue.put(utils.format_client_response(True, PAUSE, {}))
         
     # synchronize all replicas to the master's state
-    def synchronize(self, qpos=0, start_song=True, return_status = True):
+    def synchronize(self, command = 'sync', qpos=0, start_song=True, return_status = True):
         # if we aren't currently playing a song, de-queue the next one
         if self._current_song == None and (qpos == 0 or start_song == True):
             try:
@@ -177,7 +177,7 @@ class MasterMusicService(multiprocessing.Process):
                 self._current_offset = 0
             except Queue.Empty:
                 if return_status:
-                    self._status_queue.put("no songs queued")
+                    self._status_queue.put(utils.format_client_response(True, command, {}, msg='No songs queued'))
                 return
     
         self.responses = 0  # acks of success
@@ -204,9 +204,9 @@ class MasterMusicService(multiprocessing.Process):
         time.sleep(float(2*delay_buffer + 2*EXTRA_BUFFER) / MICROSECONDS)
         if self.responses >= 1 and return_status: # check for acks
             self._playing = start_song
-            self._status_queue.put("success")
+            self._status_queue.put(utils.format_client_response(True, command, {}))
         elif return_status:
-            self._status_queue.put("failure")
+            self._status_queue.put(utils.format_client_response(False, command, {}))
 
     # queue song to replicas/replicas
     # TODO: Asynchronous requests
@@ -220,10 +220,10 @@ class MasterMusicService(multiprocessing.Process):
             r = RPC(self, ENQUEUE, url=replica_url, \
                     ip=replica_ip, data={})
         if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
-            self._status_queue.put('failure timeout')
+            self._status_queue.put(utils.format_client_response(False, ENQUEUE, {}, msg='Timeout on enqueue song'))
             return
         self._playlist_queue.append(song_hash)
-        self._status_queue.put('success')          
+        self._status_queue.put(utils.format_client_response(True, ENQUEUE, {}))          
 
     def timeout(self, left_comp_flag, right_comp, timeout_value):
         start_time = time.time()
@@ -253,7 +253,7 @@ class MasterMusicService(multiprocessing.Process):
             r = RPC(self, CHECK, url=replica_url, ip=replica_ip, data={})
             r.start()
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
-            self._status_queue.put('failure timeout')
+            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load acks'))
             return
         d = None
         while !self.not_loaded_ips.empty():
@@ -266,9 +266,10 @@ class MasterMusicService(multiprocessing.Process):
             r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
             r.start()
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):
-            self._status_queue.put('failure')
+            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load'))
             return
-        self._status_queue.put('success')
+            # should save the song_hash somewhere to indicate successful loading
+        self._status_queue.put(utils.format_client_response(True, LOAD, {}))
 
 
     # main loop for music manager
@@ -283,7 +284,7 @@ class MasterMusicService(multiprocessing.Process):
                 command = command_info['command']
                 params = command_info['params']
                 if command == PLAY:
-                    self.synchronize()
+                    self.synchronize(command=PLAY)
                 elif command == PAUSE:
                     self.pause()
                 elif command == FORWARD:
