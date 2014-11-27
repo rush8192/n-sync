@@ -12,7 +12,11 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
     resp['command_epoch'] = command_epoch
   return resp
 
+<<<<<<< Updated upstream
 def format_client_response(success, command, params, msg='', client_req_id=None):
+=======
+def format_client_response(success, command, params, msg='', command_id=None):
+>>>>>>> Stashed changes
   resp = {'success': success, 'command': command, 'params': params}
   if msg != None:
     resp['msg'] = msg
