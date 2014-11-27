@@ -34,6 +34,7 @@ class RPC(threading.Thread):
   def run(self):
     if self._command != HB:
         self._data['command_epoch'] = self._parent.command_epoch
+
     self._data = utils.serialize_response(self._data)
     req = urllib2.Request(self._url, self._data) 
     start = int(round(time.time() * MICROSECONDS))
@@ -75,15 +76,12 @@ class RPC(threading.Thread):
             #with self._parent.loaded_ips.mutex:
             self._parent.loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
     elif response_command == CHECK and response_success:
-        print response_params
         if 'has_song' in response_params:
             #with self._parent.loaded_ips.mutex:
             self._parent.loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
         else:
             #with self._parent.not_loaded_ips.mutex:
             self._parent.not_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)          
-        print self._parent.loaded_ips.qsize()
-        print self._parent.not_loaded_ips.qsize()
     elif response_command == ENQUEUE:
         if 'enqueued' in response_params and response_success:
             self._parent.enqueued_acks += 1
