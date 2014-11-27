@@ -11,12 +11,12 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
     resp['command_epoch'] = command_epoch
   return resp
 
-def format_client_response(success, command, params, msg='', command_id=None):
-  resp = {'success': success, 'command': command, 'params': {})
+def format_client_response(success, command, params, msg='', client_req_id=None):
+  resp = {'success': success, 'command': command, 'params': params}
   if msg != None:
     resp['msg'] = msg
-  if command_id != None:
-    resp['command_id'] =  command_id
+  if client_req_id != None:
+    resp['client_req_id'] =  client_req_id
   return resp
 
 def serialize_response(res):

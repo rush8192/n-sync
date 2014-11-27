@@ -22,15 +22,27 @@ class MasterClientListenerService(multiprocessing.Process):
         # my own ip address/port number
         self._ip = ip
 
+        # client request id 
+        self._client_req_id = 0
+
+    def inc_client_req_id(self):
+        self._client_req_id += 1
+        return self._client_req_id
     # TODO: Assign IDs to each command instance to avoid timeout bug
     def wait_on_master_music_service(self):
         status = None
-        for i in range(0, 50):
+        i = 0
+        while(True):
+            if (i == 50):
+                break
             try:
                 status = self._status_queue.get(False)
-                break
             except Queue.Empty:
                 time.sleep(CLIENT_TIMEOUT / 50.0)
+                i += 1
+            else:
+                if self._client_req_id == status['client_req_id']:
+                    break
         if status == None:
             status = utils.format_client_response(False, TIMEOUT, {}, msg='timeout from master')
         return utils.serialize_response(status)
@@ -42,8 +54,9 @@ class MasterClientListenerService(multiprocessing.Process):
     # to receive a response status from the queue
     # endpoint: /<command_string>
     def execute_command(self, command):
+        self.inc_client_req_id()
         if command in [PLAY, PAUSE, FORWARD, BACKWARD]:
-            command_info = {'command':command, 'params':{}}
+            command_info = {'command':command, 'params':{}, 'client_req_id': self._client_req_id}
             self._command_queue.put(command_info)
             return self.wait_on_master_music_service()
         else:
@@ -52,7 +65,8 @@ class MasterClientListenerService(multiprocessing.Process):
     # Add a song to our playlist queue
     # endpoint: /queue/<song_hash>
     def enqueue_song(self, song_hash):
-        command_info = {'command':ENQUEUE, 'params':{'song_hash':song_hash}}
+        self.inc_client_req_id()
+        command_info = {'command':ENQUEUE, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
         if os.path.exists(MUSIC_DIR + song_hash + EXT):
             # verify song exists on >= f+1 replicas and in their playlist
             # queues
@@ -65,7 +79,8 @@ class MasterClientListenerService(multiprocessing.Process):
     # Load song into master
     # endpoint /load/<song_hash>
     def load_song(self, song_hash):
-        command_info = {'command':LOAD, 'params':{'song_hash':song_hash}}
+        self.inc_client_req_id()
+        command_info = {'command':LOAD, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
         if request.method == 'GET':
             if os.path.exists(MUSIC_DIR + song_hash + EXT):
                 self._command_queue.put(command_info)

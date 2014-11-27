@@ -58,6 +58,9 @@ class MasterMusicService(multiprocessing.Process):
         # counter that distinguishes commands: write is atomic due to
         # assignment and not +=
         self.command_epoch = 0
+
+        # current client request
+        self._client_req_id = None
     
     # updates the running average clock diff for a given ip
     def update_clock_diff(self, ip, diff):
@@ -139,7 +142,7 @@ class MasterMusicService(multiprocessing.Process):
         if self._playing:
             self.synchronize(command=BACKWARD)
         else:
-            self._status_queue.put(utils.format_client_response(True, BACKWARD, {}))            
+            self._status_queue.put(utils.format_client_response(True, BACKWARD, {}, client_req_id=self._client_req_id))            
     
     # pause the music
     def pause(self):
@@ -165,7 +168,7 @@ class MasterMusicService(multiprocessing.Process):
         
         # currently assume success; could count number of offset responses
         self._playing = False
-        self._status_queue.put(utils.format_client_response(True, PAUSE, {}))
+        self._status_queue.put(utils.format_client_response(True, PAUSE, {}, client_req_id=self._client_req_id))
         
     # synchronize all replicas to the master's state
     def synchronize(self, command = 'sync', qpos=0, start_song=True, return_status = True):
@@ -177,7 +180,10 @@ class MasterMusicService(multiprocessing.Process):
                 self._current_offset = 0
             except Queue.Empty:
                 if return_status:
-                    self._status_queue.put(utils.format_client_response(True, command, {}, msg='No songs queued'))
+                    self._status_queue.put(\
+                        utils.format_client_response(True, command, {}, \
+                                                     msg='No songs queued', \
+                                                     client_req_id=self._client_req_id))
                 return
     
         self.responses = 0  # acks of success
@@ -204,9 +210,9 @@ class MasterMusicService(multiprocessing.Process):
         time.sleep(float(2*delay_buffer + 2*EXTRA_BUFFER) / MICROSECONDS)
         if self.responses >= 1 and return_status: # check for acks
             self._playing = start_song
-            self._status_queue.put(utils.format_client_response(True, command, {}))
+            self._status_queue.put(utils.format_client_response(True, command, {}, client_req_id=self._client_req_id))
         elif return_status:
-            self._status_queue.put(utils.format_client_response(False, command, {}))
+            self._status_queue.put(utils.format_client_response(False, command, {}, client_req_id=self._client_req_id))
 
     # queue song to replicas/replicas
     # TODO: Asynchronous requests
@@ -220,10 +226,10 @@ class MasterMusicService(multiprocessing.Process):
             r = RPC(self, ENQUEUE, url=replica_url, \
                     ip=replica_ip, data={})
         if self.timeout('e', len(self._replicas), ENQUEUE_ACK_TIMEOUT):
-            self._status_queue.put(utils.format_client_response(False, ENQUEUE, {}, msg='Timeout on enqueue song'))
+            self._status_queue.put(utils.format_client_response(False, ENQUEUE, {}, msg='Timeout on enqueue song', client_req_id=self._client_req_id))
             return
         self._playlist_queue.append(song_hash)
-        self._status_queue.put(utils.format_client_response(True, ENQUEUE, {}))          
+        self._status_queue.put(utils.format_client_response(True, ENQUEUE, {}, client_req_id=self._client_req_id))          
 
     def timeout(self, left_comp_flag, right_comp, timeout_value):
         start_time = time.time()
@@ -244,19 +250,19 @@ class MasterMusicService(multiprocessing.Process):
         # Guaranteed RPC won't add to queue since new command_epoch prevents
         # Holding mutexes just in case
         with self.not_loaded_ips.mutex:
-            self.not_loaded_ips.clear()
+            self.not_loaded_ips.queue.clear()
         with self.loaded_ips.mutex:
-            self.loaded_ips.clear()
+            self.loaded_ips.queue.clear()
         song_hash = params['song_hash']
         for replica_ip in self._replicas:
             replica_url = 'http://' + replica_ip + CHECK_URL + '/' + song_hash
             r = RPC(self, CHECK, url=replica_url, ip=replica_ip, data={})
             r.start()
         if self.timeout('c', len(self._replicas), REPLICA_ACK_TIMEOUT):
-            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load acks'))
+            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load acks', client_req_id=self._client_req_id))
             return
         d = None
-        while !self.not_loaded_ips.empty():
+        while not self.not_loaded_ips.empty():
             replica_ip = self.not_loaded_ips.get(block=False)
             replica_url = \
                 'http://' + replica_ip + LOAD_URL + "/" + song_hash
@@ -266,10 +272,10 @@ class MasterMusicService(multiprocessing.Process):
             r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=d)
             r.start()
         if self.timeout('l', len(self._replicas), REPLICA_LOAD_TIMEOUT):
-            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load'))
+            self._status_queue.put(utils.format_client_response(True, LOAD, {}, msg='Timeout on song load', client_req_id=self._client_req_id))
             return
             # should save the song_hash somewhere to indicate successful loading
-        self._status_queue.put(utils.format_client_response(True, LOAD, {}))
+        self._status_queue.put(utils.format_client_response(True, LOAD, {}, client_req_id=self._client_req_id))
 
 
     # main loop for music manager
@@ -283,6 +289,7 @@ class MasterMusicService(multiprocessing.Process):
                 self.command_epoch = new_command_epoch
                 command = command_info['command']
                 params = command_info['params']
+                self._client_req_id = command_info['client_req_id']
                 if command == PLAY:
                     self.synchronize(command=PLAY)
                 elif command == PAUSE:

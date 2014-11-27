@@ -71,6 +71,7 @@ def load_song(song_path):
                 req.add_data(utils.serialize_response(d))
                 r = urllib2.urlopen(req)
                 master_response = r.read()
+    print master_response['client_req_id']
 
 def enqueue_song(song_path):
     load_song(song_path)
@@ -89,6 +90,7 @@ def enqueue_song(song_path):
             print song_path + ' cannot be enqueued'
     except Exception:
         print "Error in Enqueue Song"
+    print master_response['client_req_id']
 
 if __name__ == "__main__":
     if (len(sys.argv) == 1):
