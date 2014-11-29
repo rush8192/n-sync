@@ -6,6 +6,7 @@ class ReplicaFailoverService():
 
   def start(self):
     while True:
-      print 'runnin replica failover service'
-      print self._recovery._in_recovery
+      print "Entered Failover Service"
+      print self._recovery._in_recovery.value
       time.sleep(2)
+      print "Leaving Failover Service"

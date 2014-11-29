@@ -169,15 +169,7 @@ class ReplicaMusicService(multiprocessing.Process):
     # get current time. also returns offset in current song (or -1 if not playing)
     # route: /time (POST)
     def get_time(self):
-        print 'in get_tme replica music service'
-        print self._recovery._in_recovery
-
-        nanos = int(round(time.time() * MICROSECONDS))
-
-        if nanos % 2:
-            print 'inverting recovery state'
-            self._recover.in_recovery = not self._recover.in_recovery
-            
+        nanos = int(round(time.time() * MICROSECONDS))            
         self._last_beat = nanos
         offset = pygame.mixer.music.get_pos()
         if offset == -1:
