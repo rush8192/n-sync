@@ -10,7 +10,7 @@ def format_rpc_response(success, command, params, msg='', command_epoch=None):
   if msg != '':
     resp['msg'] = msg
   if command_epoch != None:
-    resp['command_epoch'] = command_epoch
+    resp['command_epoch'] = command_epoch 
   return resp
 
 def format_client_response(success, command, params, msg='', client_req_id=None):
@@ -41,5 +41,7 @@ def hash_string(s):
   return hashlib.sha224(s).hexdigest()
 
 class ReplicaRecovery():
-  def __init__(self, in_recovery):
+  def __init__(self, in_recovery, last_hb_ts, pygame_mixer_queue):
     self._in_recovery = in_recovery
+    # array of [epoch, ts]
+    self._last_hb_ts = last_hb_ts

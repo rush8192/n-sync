@@ -37,6 +37,8 @@ ENQUEUE = 'enqueue'
 LOAD = 'load'
 CHECK = 'check'
 
+FAILSTOP = 'failstop'
+
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_PAUSE = 0.5
