@@ -39,3 +39,7 @@ def get_ip_addr():
 
 def hash_string(s):
   return hashlib.sha224(s).hexdigest()
+
+class ReplicaRecovery():
+  def __init__(self, in_recovery):
+    self._in_recovery = in_recovery
