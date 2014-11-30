@@ -41,7 +41,7 @@ def hash_string(s):
   return hashlib.sha224(s).hexdigest()
 
 class ReplicaRecovery():
-  def __init__(self, in_recovery, last_hb_ts, pygame_mixer_queue):
+  def __init__(self, in_recovery, last_hb_ts):
     self._in_recovery = in_recovery
     # array of [epoch, ts]
     self._last_hb_ts = last_hb_ts

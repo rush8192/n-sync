@@ -1,22 +1,21 @@
 import time
 from constants import *
+import threading 
 
-class ReplicaFailoverService():
-  def __init__(self, replica_recovery, pygame_mixer_queue):
-    self._recovery = replica_recovery
-    self._pygame_mixer_queue = pygame_mixer_queue
+class ReplicaFailoverService(threading.Thread):
+  def __init__(self, replica_parent):
+    threading.Thread.__init__(self)
+    self._replica_parent = replica_parent
 
-  def recover_state(self):
-    print 'in recovery state'
-
-  def start(self):
+  def run(self):
     while True:
-      print "Entered Failover Service"
-      print self._recovery._last_hb_ts[1]
-      if (time.time()*MICROSECONDS - self._recovery._last_hb_ts[1]) > (2 * HEARTBEAT_PAUSE * MICROSECONDS):
-        self._recovery._in_recovery.value = True
-        pygame_mixer = self._pygame_mixer_queue.get(True)
-        pygame_mixer.stop()
-        self.recover_state()
-        self._pygame_mixer_queue.put(pygame_mixer)
-      print "Leaving Failover Service"
+      #if (time.time()*MICROSECONDS - self._recovery._last_hb_ts[1]) > (2 * HEARTBEAT_PAUSE * MICROSECONDS):
+      #  print "Entered Failover Service"
+      #  self._recovery._in_recovery.value = True
+      #  pygame_mixer = self._pygame_mixer_queue.get(True)
+      #  pygame_mixer.stop()
+      #  self.recover_state()
+      #  self._recovery._in_recovery.value = False
+      #  self._pygame_mixer_queue.put(pygame_mixer)
+      #  print "Leaving Failover Service"
+      time.sleep(REPLICA_RECOVERY_TIMEOUT)

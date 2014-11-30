@@ -28,7 +28,7 @@ class MasterClientListenerService(multiprocessing.Process):
     def inc_client_req_id(self):
         self._client_req_id += 1
         return self._client_req_id
-    # TODO: Assign IDs to each command instance to avoid timeout bug
+
     def wait_on_master_music_service(self):
         status = None
         i = 0

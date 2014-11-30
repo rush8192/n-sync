@@ -6,15 +6,18 @@ EXT = '.mp3'
 DEBUG = False
 
 MICROSECONDS = 1000000
+MILLISECONDS = 1000
 
 # extra buffer to add to synchronize rpcs to account for unexpected delays
 # and shitty pi CPU
 EXTRA_BUFFER = 100*1000 # 100 milliseconds
+ALLOWED_REPLICA_BUFFER = 400 # 400 microseconds
 
-CLIENT_TIMEOUT = 100 #seconds
-REPLICA_ACK_TIMEOUT = 100 # seconds
-REPLICA_LOAD_TIMEOUT = 100 # seconds
-ENQUEUE_ACK_TIMEOUT = 100
+CLIENT_TIMEOUT = 10 #seconds
+REPLICA_ACK_TIMEOUT = 1 # seconds
+REPLICA_LOAD_TIMEOUT = 1 # seconds
+REPLICA_RECOVERY_TIMEOUT = 1 # seconds
+
 # port numbers
 CLIENT_PORT = '8000' # for listening for client requests
 REPLICA_PORT = '5000' # for sending music commands to replica
@@ -24,6 +27,7 @@ TIME_URL = '/time'
 PLAY_URL = '/play'
 STOP_URL = '/pause'
 ENQUEUE_URL = '/enqueue'
+DEQUEUE_URL = '/dequeue'
 LOAD_URL = '/load'
 CHECK_URL = '/check'
 
@@ -36,7 +40,7 @@ BACKWARD = 'backward'
 ENQUEUE = 'enqueue'
 LOAD = 'load'
 CHECK = 'check'
-
+DEQUEUE = 'dequeue'
 FAILSTOP = 'failstop'
 
 # heartbeat config params
@@ -45,4 +49,3 @@ HEARTBEAT_PAUSE = 0.5
 
 # initial pygame buffer size
 INITIAL_BUFFER_SIZE = 512
-
