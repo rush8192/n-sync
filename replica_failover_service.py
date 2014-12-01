@@ -1,6 +1,10 @@
 import time
 from constants import *
 import threading 
+import pygame
+import os
+import utils
+import urllib2
 
 class ReplicaFailoverService(threading.Thread):
   def __init__(self, replica_parent):
@@ -30,7 +34,6 @@ class ReplicaFailoverService(threading.Thread):
     current_song = response_data['parans']['current_song']
     self._parent._playlist_queue = master_queue
     self._parent._current_song = current_song
-    #failed_file_names = []
 
     # need to update self._song_hashes in replica music server
     for file_name in songs:
@@ -43,19 +46,14 @@ class ReplicaFailoverService(threading.Thread):
       else:
           print 'successfully downloaded ' + file_name + ' in replica failover'
     return
-  # if len(failed_file_names) == 0:
-  #   resp = utils.format_rpc_response(True, RECOVER, {})
-  # else:
-  #   resp = utils.format_rpc_response(False, RECOVER, {}, 'msg': 'failed to recover ' + str(len(failed_file_names)) + ' songs')
-  # return resp
 
   def run(self):
-    while True:
-      print "Entered Failover Service"
-      print self._parent._last_hb_ts
-      if (time.time()*MICROSECONDS - self._parent._last_hb_ts) > (2 * HEARTBEAT_INTERVAL * MICROSECONDS) or self._parent._in_recovery == True:
-        self._parent._in_recovery = True
-        pygame.mixer.music.stop()
-        self.recover_state()
-        self._parent._in_recovery = False
-      time.sleep(0.1)
+      while True:
+          if self._parent._last_hb_ts != None:
+            if (time.time()*MICROSECONDS - self._parent._last_hb_ts) > (2 * HEARTBEAT_INTERVAL * MICROSECONDS) or self._parent._in_recovery == True:
+                print "REPLICA IS A FUCKING FAILURE"
+                self._parent._in_recovery = True
+                pygame.mixer.music.stop()
+                self.recover_state()
+                self._parent._in_recovery = False
+          time.sleep(HEARTBEAT_INTERVAL)

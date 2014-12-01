@@ -22,5 +22,5 @@ if __name__ == "__main__":
     # start replica service
     ip_addr = utils.get_ip_addr()
 
-    replica_service = ReplicaMusicService(collections.deque([]), ip_addr)
+    replica_service = ReplicaMusicService(collections.deque([]), ip_addr, master_ip='10.0.0.5')
     replica_service.start()

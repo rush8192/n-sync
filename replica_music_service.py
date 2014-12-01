@@ -15,7 +15,7 @@ import utils
 import os
 import pickle
 import collections
-#from replica_failover_service import ReplicaFailoverService
+from replica_failover_service import ReplicaFailoverService
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
@@ -32,7 +32,7 @@ class ReplicaMusicService(multiprocessing.Process):
         self._pygame_lock = threading.Lock()
         self._in_recovery = False # TODO: Need a rw lock here?
 
-        self._last_hb_ts = time.time() * MICROSECONDS
+        self._last_hb_ts = None
 
     # TODO: may need to remove .DS_STORE etc
     def initialize_song_hashes(self):
@@ -326,6 +326,6 @@ class ReplicaMusicService(multiprocessing.Process):
         self._app.debug = True
 
         pygame.mixer.init()
-        #rfs = ReplicaFailoverService(self)
-        #rfs.start()
+        rfs = ReplicaFailoverService(self)
+        rfs.start()
         self._app.run(host=self._ip)
