@@ -20,6 +20,7 @@ REPLICA_RECOVERY_TIMEOUT = 1 # seconds
 
 # port numbers
 CLIENT_PORT = '8000' # for listening for client requests
+REPLICA_FAIL_PORT = '3245' # telephone number for fail
 REPLICA_PORT = '5000' # for sending music commands to replica
 
 # replica endpoints
@@ -42,6 +43,7 @@ LOAD = 'load'
 CHECK = 'check'
 DEQUEUE = 'dequeue'
 FAILSTOP = 'failstop'
+RECOVER = 'recover'
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12

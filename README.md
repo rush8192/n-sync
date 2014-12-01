@@ -17,4 +17,12 @@ Before Paper:
 Future Work after paper:
 1) P2P File Distribution: Stagger recovery?
 2) Client front end
+<<<<<<< Updated upstream
 3) ZeroMQ/C++ Music Server?
+=======
+3) LRU Cache on Disk
+4) P2P File Distribution
+
+
+# Need to be able to update playlist in replica failover
+>>>>>>> Stashed changes

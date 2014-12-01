@@ -22,17 +22,20 @@ class RPC(threading.Thread):
   # parent: parent object reference (used to store any response data)
   # type: the rpc type string ("hb" for heartbeat, "play" for play command, etc)
   # ip: target ip address, url: target url, data: POST payload
-  def __init__(self, parent, command, ip, url, data):
+  def __init__(self, parent, command, ip, url, data, master_ip):
     threading.Thread.__init__(self)
     self._parent = parent
     self._command = command
     self._ip = ip
     self._url = url
     self._data = data
+    self._master_ip = master_ip
     self._data['command_epoch'] = self._parent.command_epoch
 
   # run the rpc; time it and record response depending on RPC type string
   def run(self):
+    self._data['master_ip'] = self._master_ip
+
     request_data = utils.serialize_response(self._data)
     req = urllib2.Request(self._url, request_data) 
     start = int(round(time.time() * MICROSECONDS))

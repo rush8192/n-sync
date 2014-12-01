@@ -23,3 +23,4 @@ if __name__ == "__main__":
     ip_addr = utils.get_ip_addr()
     replica_service = ReplicaMusicService(collections.deque([]), ip_addr)
     replica_service.start()
+

@@ -19,11 +19,22 @@ from replica_failover_service import ReplicaFailoverService
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
+<<<<<<< Updated upstream
     def __init__(self, playlist_queue, ip_addr):
+=======
+    def __init__(self, playlist_queue, ip_addr, replica_recovery, pygame_mixer_queue, master_ip):
+>>>>>>> Stashed changes
         multiprocessing.Process.__init__(self)
         self._stop = threading.Event()
         self._playlist_queue = playlist_queue
         self._ip = ip_addr
+<<<<<<< Updated upstream
+=======
+        self._master_ip = master_ip
+        self._recovery = replica_recovery
+        self._pygame_mixer_queue = pygame_mixer_queue
+        self._currently_playing = None        
+>>>>>>> Stashed changes
         self._song_hashes = self.initialize_song_hashes()
         self._current_song = None
 
@@ -37,7 +48,7 @@ class ReplicaMusicService(multiprocessing.Process):
         if not os.path.exists(MUSIC_DIR):
             os.makedirs(MUSIC_DIR)
         for file_name in os.listdir(MUSIC_DIR):
-            if len(file_name) >= len(EXT):
+            if (len(file_name) >= len(EXT)) and (file_name.count(EXT) != 0):
                 song_hashes.add(file_name[:-len(EXT)])
         return song_hashes
 
@@ -297,8 +308,3 @@ class ReplicaMusicService(multiprocessing.Process):
         rfs.start()
         self._app.run(host=self._ip)
 
-if __name__ == "__main__":    
-    # start replica service
-    ip_addr = utils.get_ip_addr()
-    replica_service = ReplicaMusicService(collections.deque([]), ip_addr)
-    replica_service.start()

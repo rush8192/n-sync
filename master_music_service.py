@@ -42,8 +42,9 @@ class MasterMusicService(multiprocessing.Process):
         for ip in self._replicas:
             self._latency_by_ip[ip] = [0, 0, 0]
             self._clock_difference_by_ip[ip] = [0, 0, 0]
-
         # set current song state to not playing for master
+        self._master_ip = None
+        # set current song state to not playing
         self._current_song = None
         self._current_offset = 0
         self._playing = False
@@ -103,7 +104,7 @@ class MasterMusicService(multiprocessing.Process):
         # current timestamp from a replica
         data = {"playing" : self._playing}
         replica_url = 'http://' + replica_ip + TIME_URL
-        r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data)
+        r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data, master_ip = self._master_ip)
         r.start()
     
     # send heartbeat to all replicas
@@ -262,7 +263,7 @@ class MasterMusicService(multiprocessing.Process):
         for ip in self._replicas:
             local_stop = stop_time + int(self._clock_difference_by_ip[ip][0])
             r = RPC(self, PAUSE, url='http://' + ip + STOP_URL, \
-                    ip=ip, data={"stop_time":local_stop})
+                    ip=ip, data={"stop_time":local_stop}, master_ip = self._master_ip)
             r.start()
 
         time.sleep(float(2*delay_buffer + 2*EXTRA_BUFFER) / MICROSECONDS)
@@ -338,6 +339,7 @@ class MasterMusicService(multiprocessing.Process):
                 command_info = self._command_queue.get(False)
                 command = command_info['command']
                 params = command_info['params']
+                self._master_ip = command_info['master_ip']
                 self._client_req_id = command_info['client_req_id']
                 self.reset_rpc_parameters()
                 if command == PLAY:
