@@ -12,7 +12,6 @@ import os
 import utils
 from constants import *
 from master_client_listener_service import MasterClientListenerService
-from master_replica_recovery_service import MasterReplicaRecoveryService
 from master_replica_rpc import RPC
 import collections
 import pickle
@@ -190,6 +189,9 @@ class MasterMusicService(multiprocessing.Process):
     def enqueue_song(self, params):
         song_hash = params['song_hash']
         self._playlist_queue.append(song_hash)
+        with open(PLAYLIST_STATE_FILE, 'w') as f:
+            data = utils.format_playlist_state(self._playlist_queue, self._current_song)
+            f.write(data)
         hashed_post_playlist = utils.hash_string(pickle.dumps(self._playlist_queue))
 
         rpc_data = {'current_song': self._current_song, \
@@ -298,9 +300,15 @@ class MasterMusicService(multiprocessing.Process):
         # No songs to play anymore
         if len(self._playlist_queue) == 0:
             self._current_song = None
+            with open(PLAYLIST_STATE_FILE, 'w') as f:
+                data = utils.format_playlist_state(self._playlist_queue, self._current_song)
+                f.write(data)
         # Pop out a song to play
         else:
             self._current_song = self._playlist_queue.popleft()
+            with open(PLAYLIST_STATE_FILE, 'w') as f:
+                data = utils.format_playlist_state(self._playlist_queue, self._current_song)
+                f.write(data)
         hashed_post_playlist = utils.hash_string(pickle.dumps(self._playlist_queue))
 
         # Synchronizes dequeue operation across all replicas (for master recovery)
@@ -333,8 +341,9 @@ class MasterMusicService(multiprocessing.Process):
     # main loop for music manager
     def run(self):
         self.get_initial_clock_diff()
-        mrrs = MasterReplicaRecoveryService(self)
-        mrrs.start()
+        with open(PLAYLIST_STATE_FILE, 'w') as f:
+            data = utils.format_playlist_state(self._playlist_queue, self._current_song)
+            f.write(data)
         while (True):
             # check for command; either perform command or send heartbeat
             self.command_epoch = self.command_epoch + 1

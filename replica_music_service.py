@@ -167,6 +167,12 @@ class ReplicaMusicService(multiprocessing.Process):
         curr_micros = int(round(curr_time)) 
         if self._in_recovery:
             failover_resp = utils.format_rpc_response(False, HB, {}, \
+                                                 msg='Replica in recovery mode'
+                                                 command_epoch=command_epoch)
+            return utils.serialize_response(failover_resp)
+
+        if self._in_recovery:
+            failover_resp = utils.format_rpc_response(False, HB, {}, \
                                                  msg='Replica in recovery mode',
                                                  command_epoch = command_epoch)
             return utils.serialize_response(failover_resp)

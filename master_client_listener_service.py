@@ -110,7 +110,7 @@ class MasterClientListenerService(multiprocessing.Process):
         self._app.add_url_rule("/" + LOAD + "/<song_hash>", "load_song", \
                                 self.load_song, methods=['GET', 'POST'])
         self._app.debug = True
-        self._ip = "127.0.0.1"
+        self._ip = "10.0.0.5"
         self._app.run(host=self._ip, port=int(CLIENT_PORT))
 
 

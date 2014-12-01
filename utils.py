@@ -45,3 +45,6 @@ class ReplicaRecovery():
     self._in_recovery = in_recovery
     # array of [epoch, ts]
     self._last_hb_ts = last_hb_ts
+
+def format_playlist_state(playlist, current_song):
+  return pickle.dumps({'playlist': playlist, 'current_song': current_song})

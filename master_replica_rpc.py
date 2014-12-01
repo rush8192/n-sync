@@ -43,7 +43,6 @@ class RPC(threading.Thread):
     end = int(round(time.time() * MICROSECONDS))
 
     response_data = utils.unserialize_response(response)
-    print response_data['command']
     # Short circuit out to prevent races, ignore timed out rpc calls
     if response_data['command_epoch'] != self._parent.command_epoch:
         return 
