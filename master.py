@@ -25,6 +25,8 @@ if __name__ == "__main__":
         for ip_addr in f:
             REPLICA_IP_ADDRS.append(ip_addr.strip() + ':' + REPLICA_PORT)
     # determine our IP, start client listener
+    print REPLICA_IP_ADDRS
+
     ip_addr = utils.get_ip_addr()
     command_queue = multiprocessing.Queue()
     status_queue = multiprocessing.Queue()

@@ -44,6 +44,7 @@ CHECK = 'check'
 DEQUEUE = 'dequeue'
 FAILSTOP = 'failstop'
 RECOVER = 'recover'
+RECONNECT = 'reconnect'
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12

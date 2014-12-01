@@ -17,6 +17,7 @@ class MasterReplicaRecoveryService(threading.Thread):
         self._parent = parent
 
     def recover_replica(self):
+        print "RECOVERING FUCKING REPLICA"
         data = utils.unserialize_response(request.get_data())
         replica_song_hashes = data['song_hashes']
         master_queue = self._parent._playlist_queue
@@ -39,10 +40,17 @@ class MasterReplicaRecoveryService(threading.Thread):
         resp = utils.format_rpc_response(True, RECOVER, {'songs': missing_songs, 'master_queue': master_queue, 'current_song': current_song})
         return utils.serialize_response(resp)
 
+    def reconnected_replica(self):
+        data = utils.unserialize_response(request.get_data())
+        if data['msg'] == 'yo':
+            return utils.serialize_response({'msg': 'yo'})
+
     def run(self):
         self._app = Flask(__name__)
         # Register endpoints
         self._app.add_url_rule("/" + RECOVER, "recover_replica", \
                                 self.recover_replica, methods=['GET', 'POST'])
+        self._app.add_url_rule("/" + RECONNECT, 'reconneted_replica', \
+                                self.reconnected_replica, methods=['GET', 'POST'])
         self._ip = "127.0.0.1"
         self._app.run(host=self._ip, port=int(REPLICA_FAIL_PORT))
