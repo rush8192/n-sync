@@ -29,22 +29,22 @@ class MasterClientListenerService(multiprocessing.Process):
         self._client_req_id += 1
         return self._client_req_id
 
-    def wait_on_master_music_service(self):
+    def wait_on_master_music_service(self, command):
         status = None
         i = 0
         while(True):
-            if (i == 50):
+            if (i == 500):
                 break
             try:
                 status = self._status_queue.get(False)
             except Queue.Empty:
-                time.sleep(CLIENT_TIMEOUT / 50.0)
+                time.sleep(CLIENT_TIMEOUT / 500.0)
                 i += 1
             else:
                 if self._client_req_id == status['client_req_id']:
                     break
         if status == None:
-            status = utils.format_client_response(False, TIMEOUT, {}, msg='timeout from master')
+            status = utils.format_client_response(False, command, {}, msg='timeout from master', client_req_id=self._client_req_id)
         return utils.serialize_response(status)
 
     # TODO: modify this command to accept client request and return response to client
@@ -54,25 +54,26 @@ class MasterClientListenerService(multiprocessing.Process):
     # to receive a response status from the queue
     # endpoint: /<command_string>
     def execute_command(self, command):
+        print 'master client executing ' + command
         self.inc_client_req_id()
         if command in [PLAY, PAUSE, FORWARD, BACKWARD]:
             command_info = {'command':command, 'params':{}, 'client_req_id': self._client_req_id}
             self._command_queue.put(command_info)
-            return self.wait_on_master_music_service()
+            return self.wait_on_master_music_service(command)
         else:
             return utils.serialize_response(utils.format_client_response(True, command, {}))
 
     # Add a song to our playlist queue
     # endpoint: /queue/<song_hash>
     def enqueue_song(self, song_hash):
+        print 'master client: enqueue song'
         self.inc_client_req_id()
-        print 'in enqueue song client master'
         command_info = {'command':ENQUEUE, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
         if os.path.exists(utils.get_music_path(song_hash)):
             # verify song exists on >= f+1 replicas and in their playlist
             # queues
             self._command_queue.put(command_info)
-            return self.wait_on_master_music_service()
+            return self.wait_on_master_music_service(ENQUEUE)
         # song doesn't exist on master, get the song from the client
         else:
             return utils.serialize_response(utils.format_client_response(False, ENQUEUE, {}, msg='Requested song to enqueue does not exist'))
@@ -80,13 +81,13 @@ class MasterClientListenerService(multiprocessing.Process):
     # Load song into master
     # endpoint /load/<song_hash>
     def load_song(self, song_hash):
-        print "hi"
+        print "master client: load song"
         self.inc_client_req_id()
         command_info = {'command':LOAD, 'params':{'song_hash':song_hash}, 'client_req_id': self._client_req_id}
         if request.method == 'GET':
             if os.path.exists(utils.get_music_path(song_hash)):
                 self._command_queue.put(command_info)
-                return self.wait_on_master_music_service()
+                return self.wait_on_master_music_service(LOAD)
             # song doesn't exist on master, get the song from the client
             else:
                 return utils.serialize_response(utils.format_client_response(False, LOAD, {}, msg='Master does not have requested song'))
@@ -95,10 +96,11 @@ class MasterClientListenerService(multiprocessing.Process):
             with open(utils.get_music_path(song_hash), 'w') as f:
                 f.write(data['song_bytes'])
             self._command_queue.put(command_info)
-            return self.wait_on_master_music_service()
+            return self.wait_on_master_music_service(LOAD)
 
     def run(self):
         self._app = Flask(__name__)
+
         # Register endpoints
         self._app.add_url_rule("/" + ENQUEUE + "/<song_hash>", "enqueue_song", \
                                 self.enqueue_song, methods=['GET', 'POST'])
@@ -106,7 +108,7 @@ class MasterClientListenerService(multiprocessing.Process):
                                 self.execute_command)
         self._app.add_url_rule("/" + LOAD + "/<song_hash>", "load_song", \
                                 self.load_song, methods=['GET', 'POST'])
-        #self._app.debug = True
+        self._app.debug = True
         self._ip = "127.0.0.1"
         self._app.run(host=self._ip, port=int(CLIENT_PORT))
 

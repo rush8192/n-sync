@@ -17,7 +17,7 @@ def play():
     url = get_url(PLAY)
     try:
         r = urllib2.urlopen(url)
-        print r.read()
+        print utils.unserialize_response(r.read())
     except Exception:
         print "Error in Playing Song"
 
@@ -25,7 +25,7 @@ def forward():
     url = get_url(FORWARD)
     try:
         r = urllib2.urlopen(url)
-        print r.read()
+        print utils.unserialize_response(r.read())
     except Exception:
         print "Error in Forwarding Song"
 
@@ -33,7 +33,7 @@ def backward():
     url = get_url(BACKWARD)
     try:
         r = urllib2.urlopen(url)
-        print r.read()
+        print utils.unserialize_response(r.read())
     except Exception:
         print "Error in Backwarding Song"
 
@@ -42,7 +42,7 @@ def pause():
     print url
     try:
         r = urllib2.urlopen(url)
-        print r.read()
+        print utils.unserialize_response(r.read())
     except Exception:
         print "Error in Pausing Song"
 
@@ -71,6 +71,8 @@ def load_song(song_path):
                 req.add_data(utils.serialize_response(d))
                 r = urllib2.urlopen(req)
                 master_response = utils.unserialize_response(r.read())
+        if not master_response['success']:
+            print master_response['msg']
         print master_response['client_req_id']
 
 def enqueue_song(song_path):

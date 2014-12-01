@@ -35,6 +35,7 @@ if __name__ == "__main__":
 
     # start service that listens for client commands from above process
     # and plays music when instructed
+    playlist_queue.append('84f73f239e681466eb9c9c3adc7e4c15355b538f52b93f7015241348')
     music_server = \
         MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
                         command_queue, status_queue)

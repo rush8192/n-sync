@@ -13,9 +13,9 @@ MILLISECONDS = 1000
 EXTRA_BUFFER = 100*1000 # 100 milliseconds
 ALLOWED_REPLICA_BUFFER = 400 # 400 microseconds
 
-CLIENT_TIMEOUT = 10 #seconds
-REPLICA_ACK_TIMEOUT = 1 # seconds
-REPLICA_LOAD_TIMEOUT = 1 # seconds
+CLIENT_TIMEOUT = 20 #seconds
+REPLICA_ACK_TIMEOUT = 5 # seconds
+REPLICA_LOAD_TIMEOUT = 20 # seconds
 REPLICA_RECOVERY_TIMEOUT = 1 # seconds
 
 # port numbers
@@ -45,7 +45,9 @@ FAILSTOP = 'failstop'
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
+HEARTBEAT_INTERVAL = 2
 HEARTBEAT_PAUSE = 0.5
+QUEUE_SLEEP = 0.5
 
 # initial pygame buffer size
 INITIAL_BUFFER_SIZE = 512
