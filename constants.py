@@ -54,3 +54,7 @@ QUEUE_SLEEP = 0.5
 
 # initial pygame buffer size
 INITIAL_BUFFER_SIZE = 512
+
+PLAYLIST_STATE_FILE = 'backup/playlist_state'
+
+

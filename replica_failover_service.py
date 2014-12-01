@@ -15,7 +15,7 @@ class ReplicaFailoverService(threading.Thread):
   def recover_state(self):
     print 'in recovery state'
     while True:
-      url = url = "http://" + self._master_ip + ":" + REPLICA_FAIL_PORT + "/" + RECONNECT
+      url = "http://" + self._master_ip + ":" + REPLICA_FAIL_PORT + "/" + RECONNECT
       req = urllib2.Request(url, utils.serialize_response({'msg': 'yo'}))
       try:
         resp = urllib2.urlopen(req)
