@@ -15,6 +15,7 @@ from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
 import collections
 import pickle
+import random
 
 # handles play/pause/forward/backward commands received from client listener
 # process (MasterClientListenerService)
@@ -63,6 +64,8 @@ class MasterMusicService(multiprocessing.Process):
 
         # current client request, one thread accesses this, no need for locks
         self._client_req_id = None
+
+        self._prev_hb = time.time()
     
     # updates the running average clock diff for a given ip
     def update_clock_diff(self, ip, diff):
@@ -117,16 +120,17 @@ class MasterMusicService(multiprocessing.Process):
     # Waits for f+1 responses from replicas before returning
     # Otherwise exponentially backs off until RPC success
     def exponential_backoff(self, rpc_data, OP, OP_URL, time_to_sleep):
-        if 2*self.rpc_response_acks - 1 >= len(self._replicas)):
+        print 'master music: ' + OP + ' timeout'
+        if 2*self.rpc_response_acks - 1 >= len(self._replicas):
             return
-        for replica_ip in self.replicas:
+        for replica_ip in self._replicas:
             replica_url = \
                  'http://' + replica_ip + OP_URL
             r = RPC(self, OP, url=replica_url, \
                     ip=replica_ip, data=rpc_data)
             r.start()
         time.sleep(time_to_sleep)
-        self.exponential_backoff(rpc_data, OP, OP_URL, time_to_sleep * 2):
+        self.exponential_backoff(rpc_data, OP, OP_URL, time_to_sleep * 2)
 
     # Reset all the rpc parameters everytime we are doing a new command
     def reset_rpc_parameters(self):
@@ -139,10 +143,10 @@ class MasterMusicService(multiprocessing.Process):
         self.not_playing_acks = 0
 
     # Waits until timeout has occurred for load
-    def self.load_timeout(self):
+    def load_timeout(self):
         start_time = time.time()
         while True:
-            if 2*self.loaded_ips.qsize()-1 >= len(self._replicas):
+            if 2*self.rpc_loaded_ips.qsize()-1 >= len(self._replicas):
                 return False
             if (time.time() - start_time) > REPLICA_LOAD_TIMEOUT:
                 return True
@@ -155,7 +159,7 @@ class MasterMusicService(multiprocessing.Process):
 
         # Check with replicas to see which have song
         rpc_data = {}
-        exponential_backoff(rpc_data, CHECK, \
+        self.exponential_backoff(rpc_data, CHECK, \
                             CHECK_URL + '/' + song_hash, REPLICA_ACK_TIMEOUT)
 
         # Loads songs to those who don't have it
@@ -186,25 +190,27 @@ class MasterMusicService(multiprocessing.Process):
         self._playlist_queue.append(song_hash)
         hashed_post_playlist = utils.hash_string(pickle.dumps(self._playlist_queue))
 
-        rpc_data = {'current_song': current_song, \
+        rpc_data = {'current_song': self._current_song, \
                     'hashed_post_playlist': hashed_post_playlist}
 
-        self.exponential_backoff(self, rpc_data, ENQUEUE, \
+        self.exponential_backoff(rpc_data, ENQUEUE, \
                                  ENQUEUE_URL + '/' + song_hash, \
-                                 REPLICA_ACK_TIMEOUT):
+                                 REPLICA_ACK_TIMEOUT)
         self._status_queue.put(utils.format_client_response(\
                                    True, ENQUEUE, {}, \
                                    client_req_id=self._client_req_id))
 
     # Plays current_song at current_offset
+
     def play(self, return_status=True):
+        print 'master service: in play'
         success_response = utils.format_client_response(\
                                 True, PLAY, {}, \
                                 client_req_id=self._client_req_id)
         # Calls forward then play again
         if self._current_song == None:
             self.current_offset = 0
-            if self._playlist_queue.qsize() > 0:
+            if len(self._playlist_queue) > 0:
                 self.forward(return_status=False, play=False)
                 self.play(return_status=return_status)
                 return
@@ -238,11 +244,11 @@ class MasterMusicService(multiprocessing.Process):
             self._playing = True
             if return_status:
                 self._status_queue.put(utils.format_client_response(\
-                                           True, command, {}, \
+                                           True, PLAY, {}, \
                                            client_req_id=self._client_req_id))
         elif return_status:
             self._status_queue.put(utils.format_client_response(\
-                                        False, command, {}, \
+                                        False, PLAY, {}, \
                                         client_req_id=self._client_req_id))
 
     # pause the music
@@ -288,7 +294,7 @@ class MasterMusicService(multiprocessing.Process):
         # After a forward command we are always at the start of a song
         self._current_offset = 0
         # No songs to play anymore
-        if len(self._playlist_queue == 0):
+        if len(self._playlist_queue) == 0:
             self._current_song = None
         # Pop out a song to play
         else:
@@ -346,11 +352,13 @@ class MasterMusicService(multiprocessing.Process):
                     self.enqueue_song(params)
                 elif command == LOAD:
                     self.load_song(params)
-                time.sleep(HEARTBEAT_PAUSE)
             except Queue.Empty:
                 self.reset_rpc_parameters()
-                self.heartbeat_all()
-                time.sleep(HEARTBEAT_PAUSE)
+                if int(time.time() - self._prev_hb) > HEARTBEAT_INTERVAL:
+                    self.heartbeat_all()
+                    self._prev_hb = time.time()
+
+                time.sleep(QUEUE_SLEEP)
                 # all replicas have finished a song, and state is playing: 
                 # play next song if possible
                 if self.rpc_not_playing_acks == len(self._replicas) and self._playing:
