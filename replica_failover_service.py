@@ -30,12 +30,12 @@ class ReplicaFailoverService(threading.Thread):
     # need to update self._song_hashes in replica music server
     for file_name in songs:
       try:
-        with open(file_name, 'w') as f:
-          f.write(songs[file_name])
-        except Exception:
+          with open(file_name, 'w') as f:
+            f.write(songs[file_name])
+      except Exception:
           print 'song failed to download in replica failover  fuckfuckfuck'
           #failed_file_names.append(file_name)
-        else:
+      else:
           print 'successfully downloaded ' + file_name + ' in replica failover'
     return
   # if len(failed_file_names) == 0:
@@ -45,16 +45,15 @@ class ReplicaFailoverService(threading.Thread):
   # return resp
 
   def run(self):
-  while True:
-    print "Entered Failover Service"
-    print self._recovery._last_hb_ts[1]
-    if (time.time()*MICROSECONDS - self._recovery._last_hb_ts[1]) > (2 * HEARTBEAT_PAUSE * MICROSECONDS) or self._recovery._in_recovery.value == True:
-      self._recovery._in_recovery.value = True
-      pygame_mixer = self._pygame_mixer_queue.get(True)
-      pygame_mixer.stop()
-      self.recover_state()
-      self._pygame_mixer_queue.put(pygame_mixer)
-      self._recovery._in_recovery.value = False
-    time.sleep(0.1)
+    while True:
+      print "Entered Failover Service"
+      print self._recovery._last_hb_ts[1]
+      if (time.time()*MICROSECONDS - self._recovery._last_hb_ts[1]) > (2 * HEARTBEAT_PAUSE * MICROSECONDS) or self._recovery._in_recovery.value == True:
+        self._recovery._in_recovery.value = True
+        pygame_mixer = self._pygame_mixer_queue.get(True)
+        pygame_mixer.stop()
+        self.recover_state()
+        self._pygame_mixer_queue.put(pygame_mixer)
+        self._recovery._in_recovery.value = False
+      time.sleep(0.1)
     print "Leaving Failover Service"
-
