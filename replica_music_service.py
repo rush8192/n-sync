@@ -161,14 +161,15 @@ class ReplicaMusicService(multiprocessing.Process):
     # route: /time (POST)
     def get_time(self):
         self._last_hb_ts = time.time() * MICROSECONDS
-        if self._in_recovery:
-            failover_resp = utils.format_rpc_response(False, HB, {}, \
-                                                 msg='Replica in recovery mode')
-            return utils.serialize_response(failover_resp)
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         curr_time = time.time() * MICROSECONDS
         curr_micros = int(round(curr_time)) 
+        if self._in_recovery:
+            failover_resp = utils.format_rpc_response(False, HB, {}, \
+                                                 msg='Replica in recovery mode',
+                                                 command_epoch = command_epoch)
+            return utils.serialize_response(failover_resp)
         if self._in_recovery:
             failover_resp = utils.format_rpc_response(False, HB, {}, \
                                                  msg='Replica in recovery mode',
