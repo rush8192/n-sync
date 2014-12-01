@@ -238,11 +238,6 @@ class ReplicaMusicService(multiprocessing.Process):
                              master_current_song != self._current_song
         replica_failover = song_not_exist or inconsistent_queue
         if self._in_recovery or replica_failover:
-            print "Enqueue failure, going into recovery mode"
-            print "Master Hash: " + master_post_hash
-            print "Replica Hash: " + replica_post_hash
-            print "Master Current Song: " + str(master_current_song)
-            print "Replica Current Song: " + str(self._current_song)
             self._in_recovery = True
             failover_resp = utils.format_rpc_response(False, ENQUEUE, {}, \
                                                  msg='Replica in recovery mode', \
