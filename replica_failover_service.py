@@ -6,10 +6,11 @@ class ReplicaFailoverService(threading.Thread):
   def __init__(self, replica_parent):
     threading.Thread.__init__(self)
     self._parent = replica_parent
+    self._master_ip = replica_parent._master_ip
 
   def recover_state(self):
     print 'in recovery state'
-    url = "http://" + self._master_ip.value + ":" + REPLICA_FAIL_PORT + "/" + RECOVER
+    url = "http://" + self._master_ip + ":" + REPLICA_FAIL_PORT + "/" + RECOVER
     data = {'song_hashes': []}
 
     # if music directory exists, get the filenames, keep extension on filenames!!!
@@ -25,6 +26,10 @@ class ReplicaFailoverService(threading.Thread):
     # response should be a ton of music mp3 files serialized into a dictionary
     response_data = utils.unserialize_response(resp)
     songs = response_data['params']['songs']
+    master_queue = response_data['params']['master_queue']
+    current_song = response_data['parans']['current_song']
+    self._parent._playlist_queue = master_queue
+    self._parent._current_song = current_song
     #failed_file_names = []
 
     # need to update self._song_hashes in replica music server
@@ -45,16 +50,13 @@ class ReplicaFailoverService(threading.Thread):
   # return resp
 
   def run(self):
-  while True:
-    print "Entered Failover Service"
-    print self._recovery._last_hb_ts[1]
-    if (time.time()*MICROSECONDS - self._recovery._last_hb_ts[1]) > (2 * HEARTBEAT_PAUSE * MICROSECONDS) or self._recovery._in_recovery.value == True:
-      self._recovery._in_recovery.value = True
-      pygame_mixer = self._pygame_mixer_queue.get(True)
-      pygame_mixer.stop()
-      self.recover_state()
-      self._pygame_mixer_queue.put(pygame_mixer)
-      self._recovery._in_recovery.value = False
-    time.sleep(0.1)
-    print "Leaving Failover Service"
+    while True:
+      print "Entered Failover Service"
+      print self._parent._last_hb_ts
+      if (time.time()*MICROSECONDS - self._parent._last_hb_ts) > (2 * HEARTBEAT_INTERVAL * MICROSECONDS) or self._parent._in_recovery == True:
+        self._parent._in_recovery = True
+        pygame.mixer.music.stop()
+        self.recover_state()
+        self._parent._in_recovery = False
+      time.sleep(0.1)
 

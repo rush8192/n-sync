@@ -12,6 +12,7 @@ import os
 import utils
 from constants import *
 from master_client_listener_service import MasterClientListenerService
+from master_replica_recovery_service import MasterReplicaRecoveryService
 from master_replica_rpc import RPC
 import collections
 import pickle
@@ -332,6 +333,8 @@ class MasterMusicService(multiprocessing.Process):
     # main loop for music manager
     def run(self):
         self.get_initial_clock_diff()
+        mrrs = MasterReplicaRecoveryService(self)
+        mrrs.start()
         while (True):
             # check for command; either perform command or send heartbeat
             self.command_epoch = self.command_epoch + 1
