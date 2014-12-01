@@ -21,6 +21,6 @@ from replica_failover_service import ReplicaFailoverService
 if __name__ == "__main__":    
     # start replica service
     ip_addr = utils.get_ip_addr()
-    replica_service = ReplicaMusicService(collections.deque([]), ip_addr)
-    replica_service.start()
 
+    replica_service = ReplicaMusicService(collections.deque(['84f73f239e681466eb9c9c3adc7e4c15355b538f52b93f7015241348']), ip_addr)
+    replica_service.start()
