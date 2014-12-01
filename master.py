@@ -14,7 +14,7 @@ from constants import *
 from master_client_listener_service import MasterClientListenerService
 from master_replica_rpc import RPC
 from master_music_service import MasterMusicService
-from master_replica_recovery_service import MasterReplicaRecoveryService
+# from master_replica_recovery_service import MasterReplicaRecoveryService
 import collections
 
 # main master method: set up services (music service and client listener)
@@ -36,11 +36,11 @@ if __name__ == "__main__":
 
     # start service that listens for client commands from above process
     # and plays music when instructed
-    playlist_queue.append('84f73f239e681466eb9c9c3adc7e4c15355b538f52b93f7015241348')
+    # playlist_queue.append('84f73f239e681466eb9c9c3adc7e4c15355b538f52b93f7015241348')
     music_server = \
         MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
                         command_queue, status_queue)
     music_server.start()
 
-    replica_recovery_service = MasterReplicaRecoveryService(ip_addr)
-    replica_recovery_service.start()
+    # replica_recovery_service = MasterReplicaRecoveryService(ip_addr)
+    # replica_recovery_service.start()

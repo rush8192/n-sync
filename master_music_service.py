@@ -104,7 +104,7 @@ class MasterMusicService(multiprocessing.Process):
         # current timestamp from a replica
         data = {"playing" : self._playing}
         replica_url = 'http://' + replica_ip + TIME_URL
-        r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data, master_ip = self._master_ip)
+        r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data)
         r.start()
     
     # send heartbeat to all replicas
@@ -120,18 +120,18 @@ class MasterMusicService(multiprocessing.Process):
     
     # Waits for f+1 responses from replicas before returning
     # Otherwise exponentially backs off until RPC success
-    def exponential_backoff(self, rpc_data, OP, OP_URL, time_to_sleep):
-        print 'master music: ' + OP + ' timeout'
+    def exponential_backoff(self, rpc_data, command, command_url, time_to_sleep):
+        print 'master music: ' + command + ' timeout'
         if 2*self.rpc_response_acks - 1 >= len(self._replicas):
             return
         for replica_ip in self._replicas:
             replica_url = \
-                 'http://' + replica_ip + OP_URL
-            r = RPC(self, OP, url=replica_url, \
+                 'http://' + replica_ip + command_url
+            r = RPC(self, command=command, url=replica_url, \
                     ip=replica_ip, data=rpc_data)
             r.start()
         time.sleep(time_to_sleep)
-        self.exponential_backoff(rpc_data, OP, OP_URL, time_to_sleep * 2)
+        self.exponential_backoff(rpc_data, command, command_url, time_to_sleep * 2)
 
     # Reset all the rpc parameters everytime we are doing a new command
     def reset_rpc_parameters(self):
@@ -263,7 +263,7 @@ class MasterMusicService(multiprocessing.Process):
         for ip in self._replicas:
             local_stop = stop_time + int(self._clock_difference_by_ip[ip][0])
             r = RPC(self, PAUSE, url='http://' + ip + STOP_URL, \
-                    ip=ip, data={"stop_time":local_stop}, master_ip = self._master_ip)
+                    ip=ip, data={"stop_time":local_stop})
             r.start()
 
         time.sleep(float(2*delay_buffer + 2*EXTRA_BUFFER) / MICROSECONDS)
@@ -315,7 +315,7 @@ class MasterMusicService(multiprocessing.Process):
         # Start playing the next song
         # (if current_song == None then will just stop playing music)
         if play:
-            self.play(return_status)
+            self.play(False)
         if return_status:
             self._status_queue.put(success_response)
 
