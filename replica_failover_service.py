@@ -35,12 +35,12 @@ class ReplicaFailoverService(threading.Thread):
     # need to update self._song_hashes in replica music server
     for file_name in songs:
       try:
-        with open(file_name, 'w') as f:
-          f.write(songs[file_name])
-        except Exception:
+          with open(file_name, 'w') as f:
+            f.write(songs[file_name])
+      except Exception:
           print 'song failed to download in replica failover  fuckfuckfuck'
           #failed_file_names.append(file_name)
-        else:
+      else:
           print 'successfully downloaded ' + file_name + ' in replica failover'
     return
   # if len(failed_file_names) == 0:
@@ -59,4 +59,3 @@ class ReplicaFailoverService(threading.Thread):
         self.recover_state()
         self._parent._in_recovery = False
       time.sleep(0.1)
-

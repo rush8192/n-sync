@@ -15,11 +15,11 @@ import utils
 import os
 import pickle
 import collections
-from replica_failover_service import ReplicaFailoverService
+#from replica_failover_service import ReplicaFailoverService
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
-    def __init__(self, playlist_queue, ip_addr):
+    def __init__(self, playlist_queue, ip_addr, master_ip=None):
         multiprocessing.Process.__init__(self)
         self._stop = threading.Event()
         self._playlist_queue = playlist_queue
@@ -92,6 +92,7 @@ class ReplicaMusicService(multiprocessing.Process):
                     return utils.serialize_response(failover_mode_resp)
             elif song_hash != None:
                 print "Loaded song"
+                pygame.mixer.music.stop()
                 pygame.mixer.music.load(utils.get_music_path(song_hash))
 
             # Adjust start_time_microsec to account for offset difference
@@ -120,6 +121,7 @@ class ReplicaMusicService(multiprocessing.Process):
             resp = utils.format_rpc_response(True, PLAY, \
                                              {'time': curr_replica_microsec }, \
                                              command_epoch='command_epoch')
+            print "Play: " + str(self._current_song)
             return utils.serialize_response(resp)
 
     # stop the current song.
@@ -167,6 +169,11 @@ class ReplicaMusicService(multiprocessing.Process):
         command_epoch = content['command_epoch']
         curr_time = time.time() * MICROSECONDS
         curr_micros = int(round(curr_time)) 
+        if self._in_recovery:
+            failover_resp = utils.format_rpc_response(False, HB, {}, \
+                                                 msg='Replica in recovery mode',
+                                                 command_epoch = command_epoch)
+            return utils.serialize_response(failover_resp)
         with self._pygame_lock:
             replica_playing = pygame.mixer.music.get_busy()
         # Song has finished playing
@@ -181,11 +188,17 @@ class ReplicaMusicService(multiprocessing.Process):
     # Dequeue songs with acks
     def dequeue_song(self):
         self._last_hb_ts = time.time() * MICROSECONDS
-        print "In Dequeue"
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         master_post_hash = content['hashed_post_playlist']
         master_current_song = content['current_song']
+
+        failover_resp = utils.format_rpc_response(False, DEQUEUE, {}, \
+                                             msg='Replica in recovery mode', \
+                                             command_epoch=command_epoch)
+        if self._in_recovery:
+            return utils.serialize_response(failover_resp)
+        print "In Dequeue"
 
         replica_pre_hash = utils.hash_string(pickle.dumps(self._playlist_queue))
         if replica_pre_hash == master_post_hash and self._current_song == master_current_song:
@@ -201,30 +214,34 @@ class ReplicaMusicService(multiprocessing.Process):
             self._current_song = self._playlist_queue.popleft()
         replica_post_hash = utils.hash_string(pickle.dumps(self._playlist_queue))
 
-        if self._in_recovery or \
-            (replica_post_hash != master_post_hash or self._current_song != master_current_song):            
+        if (replica_post_hash != master_post_hash or self._current_song != master_current_song):            
             self._in_recovery = True
-            failover_resp = utils.format_rpc_response(False, DEQUEUE, {}, \
-                                                 msg='Replica in recovery mode', \
-                                                 command_epoch=command_epoch)
             return utils.serialize_response(failover_resp)
 
         resp = utils.format_rpc_response(True, DEQUEUE, {}, \
                                          msg='Successfully dequeued', \
                                          command_epoch=command_epoch)
+        print "end of dequeue: current song for replica: " + str(self._current_song)
         return utils.serialize_response(resp)
 
     # Enqueue songs with acks
     def enqueue_song(self, song_hash):
         self._last_hb_ts = time.time() * MICROSECONDS
-        print "In Enqueue"
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         master_post_hash = content['hashed_post_playlist']
         master_current_song = content['current_song']
+        failover_resp = utils.format_rpc_response(False, ENQUEUE, {}, \
+                                             msg='Replica in recovery mode', \
+                                             command_epoch=command_epoch)
+        if self._in_recovery:
+           return utils.serialize_response(failover_resp) 
+        print "In Enqueue"
+        print "Enqueue: " + str(self._current_song)
 
         replica_pre_hash = utils.hash_string(pickle.dumps(self._playlist_queue))
-        if replica_pre_hash == master_post_hash and self._current_song == song_hash:
+        if replica_pre_hash == master_post_hash and self._current_song == master_current_song:
+            print "Already Performed Operation in Enqueue"
             repeat_resp = utils.format_rpc_response(False, ENQUEUE, {}, \
                                                  msg='Already performed operation', \
                                                  command_epoch=command_epoch)
@@ -237,11 +254,8 @@ class ReplicaMusicService(multiprocessing.Process):
         inconsistent_queue = master_post_hash != replica_post_hash or \
                              master_current_song != self._current_song
         replica_failover = song_not_exist or inconsistent_queue
-        if self._in_recovery or replica_failover:
+        if replica_failover:
             self._in_recovery = True
-            failover_resp = utils.format_rpc_response(False, ENQUEUE, {}, \
-                                                 msg='Replica in recovery mode', \
-                                                 command_epoch=command_epoch)
             return utils.serialize_response(failover_resp)
 
         resp = utils.format_rpc_response(True, ENQUEUE, {'enqueued': True}, \
@@ -312,6 +326,6 @@ class ReplicaMusicService(multiprocessing.Process):
         self._app.debug = True
 
         pygame.mixer.init()
-        rfs = ReplicaFailoverService(self)
-        rfs.start()
+        #rfs = ReplicaFailoverService(self)
+        #rfs.start()
         self._app.run(host=self._ip)
