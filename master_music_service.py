@@ -20,7 +20,7 @@ import random
 # handles play/pause/forward/backward commands received from client listener
 # process (MasterClientListenerService)
 class MasterMusicService(multiprocessing.Process):
-    def __init__(self, replicas, playlist_queue, command_queue, status_queue):
+    def __init__(self, replicas, playlist_queue, command_queue, status_queue, term=0, ip="0.0.0.0", current_song=None):
         multiprocessing.Process.__init__(self)
         # stores the song queue
         self._playlist_queue = playlist_queue
@@ -31,6 +31,9 @@ class MasterMusicService(multiprocessing.Process):
         
         # list of all replicas IP addresses
         self._replicas = replicas
+        
+        self._term = term
+        self._ip = ip
 
         # used for tracking latency and clock diffs.
         # accessed by multiple threads
@@ -45,7 +48,7 @@ class MasterMusicService(multiprocessing.Process):
         # set current song state to not playing for master
         self._master_ip = None
         # set current song state to not playing
-        self._current_song = None
+        self._current_song = current_song
         self._current_offset = 0
         self._playing = False
         
@@ -54,6 +57,9 @@ class MasterMusicService(multiprocessing.Process):
         self.rpc_offsets = []
         self.rpc_response_acks = 0
         self.rpc_not_playing_acks = 0
+        self.rpc_playing_acks = 0
+        
+        self.consecutive_ping_failures = 0
 
         # used by rpcs to load songs for responses: TODO: read-write locks?
         self.rpc_not_loaded_ips = Queue.Queue()
@@ -74,6 +80,10 @@ class MasterMusicService(multiprocessing.Process):
             cur_avg_diff = self._clock_difference_by_ip[ip][0]
             cur_num_datapoints = self._clock_difference_by_ip[ip][1]
             cur_max_diff = self._clock_difference_by_ip[ip][2]
+            if (diff > cur_max_diff + MAX_CLOCK_DRIFT and cur_num_datapoints > CALIBRATION_DATA_POINTS):
+                print "danger! clock may be drifting or you suck at heartbeats"
+                return
+                
             new_avg = (cur_avg_diff*cur_num_datapoints + diff) / (1.0 + cur_num_datapoints)
             self._clock_difference_by_ip[ip][1] += 1
             #if (clock_difference_by_ip[ip][1] == 1): # skip first ping; tends to be noisy
@@ -102,7 +112,7 @@ class MasterMusicService(multiprocessing.Process):
     def heartbeat(self, replica_ip):
         # spawn new thread, which does an http request to fetch the
         # current timestamp from a replica
-        data = {"playing" : self._playing}
+        data = {"playing" : self._playing, "term" : self._term, "ip" : self._ip }
         replica_url = 'http://' + replica_ip + TIME_URL
         r = RPC(self, HB, url=replica_url, ip=replica_ip, data=data)
         r.start()
@@ -120,10 +130,8 @@ class MasterMusicService(multiprocessing.Process):
     
     # Waits for f+1 responses from replicas before returning
     # Otherwise exponentially backs off until RPC success
-    def exponential_backoff(self, rpc_data, command, command_url, time_to_sleep):
-        print 'master music: ' + command + ' timeout'
-        if 2*self.rpc_response_acks - 1 >= len(self._replicas):
-            return
+    def exponential_backoff(self, rpc_data, command, command_url, time_to_sleep, max_time=MAX_BACKOFF):
+        self.reset_rpc_parameters()
         for replica_ip in self._replicas:
             replica_url = \
                  'http://' + replica_ip + command_url
@@ -131,6 +139,14 @@ class MasterMusicService(multiprocessing.Process):
                     ip=replica_ip, data=rpc_data)
             r.start()
         time.sleep(time_to_sleep)
+        print "exp backoff: got x/n acks: " + str(self.rpc_response_acks) + \
+            "/" + str(len(self._replicas))
+        if 2*self.rpc_response_acks - 1 >= len(self._replicas):
+            return
+        else:
+            self.heartbeat_all()
+        if time_to_sleep*2 > max_time:
+            return # assume we have failed
         self.exponential_backoff(rpc_data, command, command_url, time_to_sleep * 2)
 
     # Reset all the rpc parameters everytime we are doing a new command
@@ -147,11 +163,15 @@ class MasterMusicService(multiprocessing.Process):
     def load_timeout(self):
         start_time = time.time()
         while True:
-            if 2*self.rpc_loaded_ips.qsize()-1 >= len(self._replicas):
+            print "load: sleeping for: " + str(REPLICA_LOAD_TIMEOUT / 100.0)
+            time.sleep(REPLICA_LOAD_TIMEOUT / 100.0)
+            if 2*self.rpc_loaded_ips.qsize() - 1 >= len(self._replicas):
                 return False
-            if (time.time() - start_time) > REPLICA_LOAD_TIMEOUT:
+            waited_time = time.time() - start_time
+            print "load: waited for : " + str(waited_time) + " got x/n acks: " + \
+                str(self.rpc_loaded_ips.qsize()) + "/" + str(len(self._replicas))
+            if waited_time > REPLICA_LOAD_TIMEOUT:
                 return True
-            time.sleep(REPLICA_LOAD_TIMEOUT / 100)
 
     # Checks with replicas to see if they have song, then sends song to those
     # that do not have song_hash
@@ -162,10 +182,16 @@ class MasterMusicService(multiprocessing.Process):
         rpc_data = {}
         self.exponential_backoff(rpc_data, CHECK, \
                             CHECK_URL + '/' + song_hash, REPLICA_ACK_TIMEOUT)
-
+        
+        # warn replicas that we are about to load a song, so might miss some
+        # heartbeats
+        for replica_ip in self._replicas:
+            r = RPC(self, PRELOAD, url='http://' + replica_ip + PRELOAD_URL, \
+                    ip=replica_ip, data={})
+            r.start()
         # Loads songs to those who don't have it
         rpc_data = None
-        while not self.rpc_not_loaded_ips.empty():
+        while (not self.rpc_not_loaded_ips.empty()):
             replica_ip = self.rpc_not_loaded_ips.get(block=False)
             replica_url = \
                 'http://' + replica_ip + LOAD_URL + "/" + song_hash
@@ -174,6 +200,7 @@ class MasterMusicService(multiprocessing.Process):
                     rpc_data = {'song_bytes': f.read()}
             r = RPC(self, LOAD, url=replica_url, ip=replica_ip, data=rpc_data)
             r.start()
+            print "sent load rpc"
         
         if self.load_timeout():
             self._status_queue.put(utils.format_client_response(\
@@ -184,10 +211,18 @@ class MasterMusicService(multiprocessing.Process):
             self._status_queue.put(utils.format_client_response(\
                                       True, LOAD, {}, \
                                       client_req_id=self._client_req_id))
+        # heartbeat, then notify that we are done loading so that normal
+        # failover checking can continue
+        self.heartbeat_all()
+        for replica_ip in self._replicas:
+            r = RPC(self, POSTLOAD, url='http://' + replica_ip + POSTLOAD_URL, \
+                    ip=replica_ip, data={})
+            r.start()
 
     # Enqueue song to replicas/replicas using indefinite exponential backoff
     def enqueue_song(self, params):
         song_hash = params['song_hash']
+        self.load_song(params)
         self._playlist_queue.append(song_hash)
         with open(PLAYLIST_STATE_FILE, 'w') as f:
             data = utils.format_playlist_state(self._playlist_queue, self._current_song)
@@ -195,7 +230,8 @@ class MasterMusicService(multiprocessing.Process):
         hashed_post_playlist = utils.hash_string(pickle.dumps(self._playlist_queue))
 
         rpc_data = {'current_song': self._current_song, \
-                    'hashed_post_playlist': hashed_post_playlist}
+                    'hashed_post_playlist': hashed_post_playlist, \
+                    'time': time.time() }
 
         self.exponential_backoff(rpc_data, ENQUEUE, \
                                  ENQUEUE_URL + '/' + song_hash, \
@@ -299,12 +335,14 @@ class MasterMusicService(multiprocessing.Process):
         self._current_offset = 0
         # No songs to play anymore
         if len(self._playlist_queue) == 0:
+            print "forward: no songs in playlist"
             self._current_song = None
             with open(PLAYLIST_STATE_FILE, 'w') as f:
                 data = utils.format_playlist_state(self._playlist_queue, self._current_song)
                 f.write(data)
         # Pop out a song to play
         else:
+            print "forward: popping song"
             self._current_song = self._playlist_queue.popleft()
             with open(PLAYLIST_STATE_FILE, 'w') as f:
                 data = utils.format_playlist_state(self._playlist_queue, self._current_song)
@@ -313,7 +351,8 @@ class MasterMusicService(multiprocessing.Process):
 
         # Synchronizes dequeue operation across all replicas (for master recovery)
         rpc_data = {'hashed_post_playlist': hashed_post_playlist, \
-                    'current_song' : self._current_song}
+                    'current_song' : self._current_song, \
+                    'time': time.time() }
         # Try indefinitely until we get at least f+1 responses
         # Guaranteed RPC won't add to queue since new command_epoch prevents
         # Holding mutexes just in case
@@ -334,7 +373,8 @@ class MasterMusicService(multiprocessing.Process):
         # Play if song was previously playing
         if self._playing:
             self.play()
-        self._status_queue.put(utils.format_client_response(\
+        else:
+            self._status_queue.put(utils.format_client_response(\
                                    True, BACKWARD, {}, \
                                    client_req_id=self._client_req_id))            
     
@@ -359,7 +399,7 @@ class MasterMusicService(multiprocessing.Process):
                 elif command == PAUSE:
                     self.pause()
                 elif command == FORWARD:
-                    self.forward()
+                    self.forward(play=self._playing)
                 elif command == BACKWARD:
                     self.backward()
                 elif command == ENQUEUE:
@@ -368,13 +408,28 @@ class MasterMusicService(multiprocessing.Process):
                     self.load_song(params)
             except Queue.Empty:
                 self.reset_rpc_parameters()
-                if int(time.time() - self._prev_hb) > HEARTBEAT_INTERVAL:
-                    self.heartbeat_all()
-                    self._prev_hb = time.time()
-
+                self.rpc_not_playing_acks = 0
+                self.rpc_playing_acks = 0
+                self.heartbeat_all()
+                self._prev_hb = time.time()
                 time.sleep(QUEUE_SLEEP)
+                
+                total_alive = self.rpc_not_playing_acks + self.rpc_playing_acks
                 # all replicas have finished a song, and state is playing: 
                 # play next song if possible
+                if 2*self.rpc_playing_acks - 1 >= len(self._replicas):
+                    self._playing = True
                 if self.rpc_not_playing_acks == len(self._replicas) and self._playing:
                     self._playing = False # Prevents infinite tries of HB plays
                     self.forward(return_status=False)
+                elif 2*total_alive - 1 < len(self._replicas):
+                    # not enough acks: assume we are dead, time to fail
+                    print "Not enough acks! master might be partioned."
+                    self.consecutive_ping_failures += 1
+                    if self.consecutive_ping_failures >= 5:
+                         # this kills all master proccesses
+                        os.system("kill -9 `ps -ef | grep master.py | grep -v grep | awk '{print $2}'`")
+                        #kill -9 `ps -ef | grep replica.py | grep -v grep | awk '{print $2}'`
+            
+                else:
+                    self.consecutive_ping_failures = 0

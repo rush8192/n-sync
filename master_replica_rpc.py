@@ -42,11 +42,19 @@ class RPC(threading.Thread):
     response = urllib2.urlopen(req).read()
     end = int(round(time.time() * MICROSECONDS))
 
-    response_data = utils.unserialize_response(response)
+    try:
+        response_data = utils.unserialize_response(response)
+    except:
+        # votes should fail to unserialize
+        response_data = response
+        if "yes" in response_data:
+            self._parent.yes_votes[self._ip] = "yes"    
+        return   
+        
     # Short circuit out to prevent races, ignore timed out rpc calls
-    if response_data['command_epoch'] != self._parent.command_epoch:
+    print str(response_data)
+    if 'command_epoch' in response_data and response_data['command_epoch'] != self._parent.command_epoch:
         return 
-
     response_command = response_data['command']
     response_success = response_data['success']
     response_params = response_data['params']
@@ -64,6 +72,8 @@ class RPC(threading.Thread):
             self._parent.update_latency(self._ip, (end - start) / 2.0)
             if not replica_playing:
                 self._parent.rpc_not_playing_acks += 1
+            else:
+                self._parent.rpc_playing_acks += 1
             # estimate for other computers clock time: their time, 
             # plus return network latency, which we approximate with (end-start)/2
             clock_estimate = response_time + (end - start) / 2
@@ -82,6 +92,9 @@ class RPC(threading.Thread):
             if 'has_song' in response_params:
                 self._parent.rpc_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
             else:
-                self._parent.rpc_not_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)          
+                self._parent.rpc_not_loaded_ips.put(response_params['ip'] + ':' + REPLICA_PORT)
+    else:
+        self._parent.rpc_not_playing_acks += 1
+            
     if DEBUG:
         print "ip:" + self._ip + ":" + str(response_data)

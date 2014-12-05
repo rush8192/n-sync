@@ -32,6 +32,15 @@ if __name__ == "__main__":
     status_queue = multiprocessing.Queue()
     playlist_queue = collections.deque([])
 
+    term = 0
+    my_current_song = None
+    if len(sys.argv) == 3 and sys.argv[1] == "-r":
+        with open(PLAYLIST_STATE_FILE) as f:
+            playlist_queue, my_current_song, term, timestamp = utils.load_playlist_state(f.read())
+        term = int(sys.argv[2])
+            
+
+
     client_listener_service = \
         MasterClientListenerService(ip_addr, command_queue, status_queue)
     client_listener_service.start()
@@ -41,7 +50,7 @@ if __name__ == "__main__":
     # playlist_queue.append('84f73f239e681466eb9c9c3adc7e4c15355b538f52b93f7015241348')
     music_server = \
         MasterMusicService(REPLICA_IP_ADDRS, playlist_queue, \
-                        command_queue, status_queue)
+                        command_queue, status_queue, term, ip_addr, my_current_song)
     music_server.start()
 
     replica_recovery_service = MasterReplicaRecoveryService(ip_addr)

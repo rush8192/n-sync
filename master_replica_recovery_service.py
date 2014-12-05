@@ -58,6 +58,6 @@ class MasterReplicaRecoveryService(multiprocessing.Process):
                                 self.recover_replica, methods=['GET', 'POST'])
         self._app.add_url_rule("/" + RECONNECT, 'reconnected_replica', \
                                 self.reconnected_replica, methods=['GET', 'POST'])
-        self._app.debug = True
+        #self._app.debug = True
         self._app.run(host=self._ip, port=int(REPLICA_FAIL_PORT))
 

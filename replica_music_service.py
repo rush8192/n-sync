@@ -19,12 +19,19 @@ from replica_failover_service import ReplicaFailoverService
 
 # listens for master commands, plays/pauses/skips as needed
 class ReplicaMusicService(multiprocessing.Process):
-    def __init__(self, playlist_queue, ip_addr, master_ip=None):
+    def __init__(self, playlist_queue, ip_addr, state_queue, response_queue, master_ip=None):
         multiprocessing.Process.__init__(self)
         self._stop = threading.Event()
         self._playlist_queue = playlist_queue
         self._ip = ip_addr
         self._master_ip = master_ip
+        self._master_term = 0
+        self._master_timestamp = 0
+        self._state_queue = state_queue
+        self._response_queue = response_queue
+
+        self._loading_song = False
+
         self._song_hashes = self.initialize_song_hashes()
         self._current_song = None
 
@@ -70,8 +77,8 @@ class ReplicaMusicService(multiprocessing.Process):
         # Short circuit crucial to not starve failover_service process on
         # pygame_mixer object
         # Case 2: Song hash doesn't exist
-        if self._in_recovery or not \
-        os.path.exists(utils.get_music_path(song_hash)):
+        if self._in_recovery or (song_hash != None and not \
+        os.path.exists(utils.get_music_path(song_hash))):
             self._in_recovery = True
             return utils.serialize_response(failover_mode_resp)
 
@@ -79,6 +86,7 @@ class ReplicaMusicService(multiprocessing.Process):
         # before moving on (True)
         with self._pygame_lock:
             replica_offset = int(round(pygame.mixer.music.get_pos()))
+            offset_diff = master_offset - replica_offset
             # Ideally if pygame.mixer.music.play(offset) works then these would not be
             # errors but alas such is life and we must go into recovery
             if master_offset > 0: 
@@ -87,7 +95,7 @@ class ReplicaMusicService(multiprocessing.Process):
                 #         This should not happen since master determines
                 #         offset as max of replica offsets
                 if self._current_song != song_hash or \
-                   master_offset > replica_offset:
+                   abs(offset_diff) > MAX_OFFSET_DIF:
                     self._in_recovery = True
                     return utils.serialize_response(failover_mode_resp)
             elif song_hash != None:
@@ -97,10 +105,8 @@ class ReplicaMusicService(multiprocessing.Process):
 
             # Adjust start_time_microsec to account for offset difference
             if master_offset > 0:
-                offset_diff = master_offset - replica_offset
                 start_time_microsec = \
                     start_time_microsec - (offset_diff*MILLISECONDS)
-                assert(offset_diff >= 0)
             
             # wait until start time, then play
             curr_replica_microsec = int(round(time.time() * MICROSECONDS))
@@ -108,10 +114,10 @@ class ReplicaMusicService(multiprocessing.Process):
             print master_offset
             while (curr_replica_microsec + ALLOWED_REPLICA_BUFFER < start_time_microsec):
                 curr_replica_microsec = int(round(time.time() * MICROSECONDS))
+            print "Song hash: " + str(song_hash)
             if song_hash == None:
                 pygame.mixer.music.stop()
             elif master_offset == 0:
-                print "Should play now"
                 pygame.mixer.music.play(1)
             else:
                 pygame.mixer.music.unpause()
@@ -163,23 +169,16 @@ class ReplicaMusicService(multiprocessing.Process):
         self._last_hb_ts = time.time() * MICROSECONDS
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
+        if "term" in content and int(content["term"]) > self._master_term:
+            self._master_term = int(content["term"])
+        if "ip" in content and (self._master_ip == None or self._master_ip != content["ip"]):
+            self._master_ip = content["ip"]
         curr_time = time.time() * MICROSECONDS
         curr_micros = int(round(curr_time)) 
         if self._in_recovery:
             failover_resp = utils.format_rpc_response(False, HB, {}, \
-                                                 msg='Replica in recovery mode'
+                                                 msg='Replica in recovery mode', \
                                                  command_epoch=command_epoch)
-            return utils.serialize_response(failover_resp)
-
-        if self._in_recovery:
-            failover_resp = utils.format_rpc_response(False, HB, {}, \
-                                                 msg='Replica in recovery mode',
-                                                 command_epoch = command_epoch)
-            return utils.serialize_response(failover_resp)
-        if self._in_recovery:
-            failover_resp = utils.format_rpc_response(False, HB, {}, \
-                                                 msg='Replica in recovery mode',
-                                                 command_epoch = command_epoch)
             return utils.serialize_response(failover_resp)
         with self._pygame_lock:
             replica_playing = pygame.mixer.music.get_busy()
@@ -199,7 +198,6 @@ class ReplicaMusicService(multiprocessing.Process):
         command_epoch = content['command_epoch']
         master_post_hash = content['hashed_post_playlist']
         master_current_song = content['current_song']
-
         failover_resp = utils.format_rpc_response(False, DEQUEUE, {}, \
                                              msg='Replica in recovery mode', \
                                              command_epoch=command_epoch)
@@ -208,7 +206,7 @@ class ReplicaMusicService(multiprocessing.Process):
         print "In Dequeue"
 
         replica_pre_hash = utils.hash_string(pickle.dumps(self._playlist_queue))
-        if replica_pre_hash == master_post_hash and self._current_song == master_current_song:
+        if replica_pre_hash == master_post_hash and self._current_song == master_current_song and self._current_song != None:
             repeat_resp = utils.format_rpc_response(False, DEQUEUE, {}, \
                                                  msg='Already performed operation', \
                                                  command_epoch=command_epoch)
@@ -224,7 +222,8 @@ class ReplicaMusicService(multiprocessing.Process):
         if (replica_post_hash != master_post_hash or self._current_song != master_current_song):            
             self._in_recovery = True
             return utils.serialize_response(failover_resp)
-
+        master_time = content['time']
+        self._master_timestamp = master_time
         resp = utils.format_rpc_response(True, DEQUEUE, {}, \
                                          msg='Successfully dequeued', \
                                          command_epoch=command_epoch)
@@ -260,17 +259,30 @@ class ReplicaMusicService(multiprocessing.Process):
         replica_post_hash = utils.hash_string(pickle.dumps(self._playlist_queue))
         inconsistent_queue = master_post_hash != replica_post_hash or \
                              master_current_song != self._current_song
+        print "queue hashes match: " + str(master_post_hash == replica_post_hash)
+        print "current song matches: " + str(master_current_song) + " == " + str(self._current_song)
         replica_failover = song_not_exist or inconsistent_queue
         if replica_failover:
             self._in_recovery = True
             return utils.serialize_response(failover_resp)
-
+        master_time = content['time']
+        self._master_timestamp = master_time
         resp = utils.format_rpc_response(True, ENQUEUE, {'enqueued': True}, \
                                          command_epoch=command_epoch)
+        print str(resp)
+        return utils.serialize_response(resp)
+
+    def preload_song(self):
+        self._loading_song = True
+        resp = utils.format_rpc_response(True, PRELOAD,{})
+        return utils.serialize_response(resp)
+
+    def postload_song(self):
+        self._loading_song = False
+        resp = utils.format_rpc_response(True, POSTLOAD,{})
         return utils.serialize_response(resp)
 
     def load_song(self, song_hash):
-        self._last_hb_ts = time.time() * MICROSECONDS
         content = utils.unserialize_response(request.get_data())
         command_epoch = content['command_epoch']
         song_bytes = content['song_bytes']
@@ -278,6 +290,7 @@ class ReplicaMusicService(multiprocessing.Process):
             failover_resp = utils.format_rpc_response(False, LOAD, {}, \
                                                  msg='Replica in recovery mode', \
                                                  command_epoch=command_epoch)
+            self._last_hb_ts = time.time() * MICROSECONDS
             return utils.serialize_response(failover_resp)
         try:
             with open(utils.get_music_path(song_hash), 'w') as f:
@@ -291,6 +304,7 @@ class ReplicaMusicService(multiprocessing.Process):
             resp = utils.format_rpc_response(True, LOAD, \
                                              {'has_song': True, 'ip':self._ip}, \
                                              command_epoch=command_epoch)
+        self._last_hb_ts = time.time() * MICROSECONDS
         return utils.serialize_response(resp)
 
     def check_song(self, song_hash):
@@ -315,7 +329,7 @@ class ReplicaMusicService(multiprocessing.Process):
     def run(self):
         print "Starting Replica Server"
         self._app = Flask(__name__)     
-        self._app.debug = True
+        #self._app.debug = True
  
         # register routes and handler methods
 
@@ -325,14 +339,19 @@ class ReplicaMusicService(multiprocessing.Process):
                                self.dequeue_song, methods=['POST'])
         self._app.add_url_rule("/load/<song_hash>", "load_song", \
                                self.load_song, methods=['POST'])
+        self._app.add_url_rule("/preload", "preload_song", \
+                               self.preload_song, methods=['POST'])
+        self._app.add_url_rule("/postload", "postload_song", \
+                               self.postload_song, methods=['POST'])
         self._app.add_url_rule("/check/<song_hash>", "check_song", \
                                self.check_song, methods=['POST'])
         self._app.add_url_rule("/play", "play", self.play, methods=['POST'])
         self._app.add_url_rule("/pause", "pause", self.pause, methods=['POST'])
         self._app.add_url_rule("/time", "get_time", self.get_time, methods=['POST'])
-        self._app.debug = True
+        #self._app.debug = True
 
-        pygame.mixer.init()
+        pygame.mixer.init(buffer=INITIAL_BUFFER_SIZE)
+        
         rfs = ReplicaFailoverService(self)
         rfs.start()
         self._app.run(host=self._ip)
