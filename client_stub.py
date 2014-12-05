@@ -7,7 +7,7 @@ import os
 from constants import *
 import utils
 
-MASTER_IP = "192.168.1.138"
+MASTER_IP = "192.168.1.197"
 PORT = "8000"
 
 def get_url(command):
