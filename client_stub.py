@@ -1,4 +1,4 @@
-import sys
+mport sys
 import urllib2
 import argparse
 import hashlib
@@ -6,6 +6,7 @@ import json
 import os
 from constants import *
 import utils
+import time
 
 MASTER_IP = "192.168.1.197"
 PORT = "8000"
@@ -71,6 +72,7 @@ def load_song(song_path):
                 req.add_data(utils.serialize_response(d))
                 r = urllib2.urlopen(req)
                 master_response = utils.unserialize_response(r.read())
+    
         if not master_response['success']:
             print master_response['msg']
         print master_response['client_req_id']
@@ -109,17 +111,27 @@ if __name__ == "__main__":
     parser.add_argument('-l', type=str, default=None)
     parser.add_argument('-q', type=str, default=None)
     args = parser.parse_args()
+    start = time.time()
+    op = None
     if args.pl:
         play()
+        op = PLAY
     if args.pa:
         pause()
+        op = PAUSE
     if args.f:
         forward()
+        op = FORWARD
     if args.b:
         backward()
+        op = BACKWARD
     if args.l != None:
         load_song(args.l)
+        op = LOAD
     if args.q != None:
         enqueue_song(args.q)
+        op = ENQUEUE
+    print op + ' took ' + str(time.time() - start) + ' sec'
+    
 
 
