@@ -325,6 +325,12 @@ class ReplicaMusicService(multiprocessing.Process):
                                              command_epoch = command_epoch)
         return utils.serialize_response(resp)
     
+    def get_master(self):
+        if self._master_ip == None:
+            return "None"
+        else:
+            return self._master_ip
+    
     # start replica service: register routes and init music player
     def run(self):
         print "Starting Replica Server"
@@ -348,6 +354,7 @@ class ReplicaMusicService(multiprocessing.Process):
         self._app.add_url_rule("/play", "play", self.play, methods=['POST'])
         self._app.add_url_rule("/pause", "pause", self.pause, methods=['POST'])
         self._app.add_url_rule("/time", "get_time", self.get_time, methods=['POST'])
+        self._app.add_url_rule("/master", "get_master", self.get_master, methods=['GET'])
         #self._app.debug = True
 
         pygame.mixer.init(buffer=INITIAL_BUFFER_SIZE)

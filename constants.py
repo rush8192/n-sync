@@ -20,7 +20,7 @@ CALIBRATION_DATA_POINTS = 10
 MAX_OFFSET_DIF = 100
 
 CLIENT_TIMEOUT = 200 #seconds
-REPLICA_ACK_TIMEOUT = 1 # seconds
+REPLICA_ACK_TIMEOUT = 0.1 # seconds
 REPLICA_LOAD_TIMEOUT = 200 # seconds
 REPLICA_RECOVERY_TIMEOUT = 1 # seconds
 
@@ -64,6 +64,8 @@ PRELOAD = 'preload'
 POSTLOAD = 'postload'
 
 VOTE = 'vote'
+
+GET_CLOCK_VARIANCE = False
 
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12

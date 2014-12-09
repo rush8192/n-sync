@@ -38,6 +38,7 @@ if __name__ == "__main__":
         with open(PLAYLIST_STATE_FILE) as f:
             playlist_queue, my_current_song, term, timestamp = utils.load_playlist_state(f.read())
         term = int(sys.argv[2])
+        print "restarted master; term is : " + str(term)
             
 
 

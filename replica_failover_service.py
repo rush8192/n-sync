@@ -95,7 +95,8 @@ class ReplicaFailoverService(threading.Thread):
     # after 0.5 seconds if master hasnt been elected, try to get votes ourselves
     # finally, if we fail to get votes after 1 second, assume we are partitioned
     # and go into failure mode
-    print "writing playlist state to file"
+    my_time = time.time()
+    print "writing playlist state to file: " + str(my_time)
     with open(PLAYLIST_STATE_FILE, 'w') as f:
         data = utils.format_playlist_state(self._parent._playlist_queue, self._parent._current_song, \
                                             self._parent._master_term, self._parent._master_timestamp)
@@ -121,8 +122,9 @@ class ReplicaFailoverService(threading.Thread):
                 print "got response: " + str(resp)
                 if "success" in resp:
                     self.get_new_timeout_threshold()
-                    print "won election, starting master process"
-                    os.system("./master.py -r " + str(self._parent._master_term))
+                    my_time = time.time()
+                    print "won election, starting master process : " + str(my_time) 
+                    os.system("./master.py -r " + str(self._parent._master_term + 1))
                     return
                 else:
                     continue
@@ -138,6 +140,8 @@ class ReplicaFailoverService(threading.Thread):
         time.sleep(0.25)        
         # check last time for new master
         if (time.time()*MICROSECONDS - self._parent._last_hb_ts) <= self._timeout_threshold:
+            my_time = time.time()
+            print "someone won election: " + str(my_time)
             replica_url = 'http://' + self._parent._ip + ":" + VOTE_PORT + UNFAIL_URL
             r = RPC(self, VOTE, url=replica_url, ip=self._parent._ip, data={})
             r.start()
