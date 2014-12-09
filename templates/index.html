@@ -1,0 +1,107 @@
+{% extends "bootstrap/base.html" %}
+
+{% block title %} 
+  NSync
+{% endblock %}
+
+{% block content %}
+  <div class="modal-body row">
+    <div class="col-md-4">
+      <h3> Currently Playing: </h3>
+      <h3> {{ playlist[0] }} </h3>
+      <br>
+      <button type="button" id="backward-btn" class="btn btn-default btn-lg" onclick="backward()">
+        <span class="glyphicon glyphicon-backward" aria-hidden="true"></span>
+      </button>
+      <button type="button" id="play-btn" class="btn btn-default btn-lg" onclick="play()">
+        <span class="glyphicon glyphicon-play" aria-hidden="true"></span>
+      </button>
+      <button type="button" id="pause-btn" class="btn btn-default btn-lg" onclick="pause()">
+        <span class="glyphicon glyphicon-pause" aria-hidden="true"></span>
+      </button>
+      <button type="button" id="forward-btn" class="btn btn-default btn-lg" onclick="forward()">
+        <span class="glyphicon glyphicon-forward" aria-hidden="true"></span>
+      </button>
+      <br>
+      <br>
+      <div class="form-inline">
+        <div class="input-group">
+          <div class="input-group-menu">
+            <select id="song-select" class="selectpicker form-control">
+              {% for song in song_files %}
+                <option value="{{ song }}">{{ song }}</option>
+              {% endfor %}
+            </select>
+            <select id="load-enqueue-select" class="selectpicker form-control">
+                <option value="load">Load</option>
+                <option value="enqueue">Enqueue</option>
+            </select>
+          </div>
+          <span class="input-group-btn">
+            <button id="load-enqueue-button" class="btn btn-primary" type="button" onclick="load_enqueue()">Go!</button>
+          </span>
+        </div><!-- /input-group -->
+      </div>
+    </div>
+    <div class="col-md-4">
+        <table class="table table-striped">
+           <thead>
+               <tr>
+                   <th>Playlist</th>
+               </tr>
+           </thead>
+           <tbody>
+             {% for song in playlist %}
+               <tr>
+                   <td>{{ song }}</td>
+               </tr>
+             {% endfor %}
+           </tbody>
+        </table>
+    </div>
+  </div>
+  <script>
+    function backward() {
+      $.ajax({url:'/backward', success:function(result) {
+          console.log(result)
+        }
+      })
+    }
+
+    function play() {
+      $('#play-btn').hide()
+      $('#pause-btn').show()
+      $.ajax({url:'/play', success:function(result) {
+          console.log(result)
+        }
+      })
+    }
+
+    function pause() {
+      $('#pause-btn').hide()
+      $('#play-btn').show()
+      $.ajax({url:'/pause', success:function(result) {
+          console.log(result)
+        }
+      })
+    }
+
+    function forward() {
+      $.ajax({url:'/forward', success:function(result) {
+          console.log(result)
+          window.location.reload()
+        }
+      })
+    }
+
+    function load_enqueue() {
+      song_file = $("#song-select").val()
+      command = $("#load-enqueue-select").val()
+      $.ajax({url:'/'+command+'/'+song_file, success:function(result) {
+          console.log(result)
+          window.location.reload()
+        }
+      })
+    }
+  </script>
+{% endblock %}
