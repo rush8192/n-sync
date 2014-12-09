@@ -65,6 +65,8 @@ POSTLOAD = 'postload'
 
 VOTE = 'vote'
 
+GET_CLOCK_VARIANCE = False
+
 # heartbeat config params
 INITIAL_CALIBRATION_PINGS = 12
 HEARTBEAT_INTERVAL = 2.5

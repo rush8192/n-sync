@@ -40,11 +40,14 @@ class MasterMusicService(multiprocessing.Process):
         self._update_lock = threading.Lock()
         self._latency_by_ip = {}
         self._clock_difference_by_ip = {}
+        
+        self._clock_diffs = {}
 
         # initialize latency and diff to 0
         for ip in self._replicas:
             self._latency_by_ip[ip] = [0, 0, 0]
             self._clock_difference_by_ip[ip] = [0, 0, 0]
+            self._clock_diffs[ip] = []
         # set current song state to not playing for master
         self._master_ip = None
         # set current song state to not playing
@@ -74,6 +77,18 @@ class MasterMusicService(multiprocessing.Process):
 
         self._prev_hb = time.time()
     
+    def calculate_diff_variance(self, ip):
+        total = 0
+        for diff in self._clock_diffs[ip]:
+            total += diff
+        avg = total / float(len(self._clock_diffs[ip]))
+        total_var = 0
+        for diff in self._clock_diffs[ip]:
+            total_var += (avg - diff)*(avg - diff)
+        var = total_var / float(len(self._clock_diffs[ip]))
+        std_dev = var**0.5
+        print "##AVG: " + str(avg) + "  VAR: " + str(var) + " STDDEV: " + str(std_dev) + " IP: " + str(ip)
+    
     # updates the running average clock diff for a given ip
     def update_clock_diff(self, ip, diff):
         with self._update_lock:
@@ -83,7 +98,11 @@ class MasterMusicService(multiprocessing.Process):
             if (diff > cur_max_diff + MAX_CLOCK_DRIFT and cur_num_datapoints > CALIBRATION_DATA_POINTS):
                 print "danger! clock may be drifting or you suck at heartbeats"
                 return
-                
+            if GET_CLOCK_VARIANCE:
+                self._clock_diffs[ip].append(diff)
+                if len(self._clock_diffs[ip]) == 100:
+                    self.calculate_diff_variance(ip)
+                    
             new_avg = (cur_avg_diff*cur_num_datapoints + diff) / (1.0 + cur_num_datapoints)
             self._clock_difference_by_ip[ip][1] += 1
             #if (clock_difference_by_ip[ip][1] == 1): # skip first ping; tends to be noisy

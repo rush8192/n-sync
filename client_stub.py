@@ -1,4 +1,4 @@
-mport sys
+import sys
 import urllib2
 import argparse
 import hashlib
@@ -8,8 +8,9 @@ from constants import *
 import utils
 import time
 
-MASTER_IP = "192.168.1.197"
+MASTER_IP = "192.168.1.138"
 PORT = "8000"
+REPLICA_IP_ADDRS = []
 
 def get_url(command):
     return "http://" + MASTER_IP + ":" + PORT + "/" + command
@@ -102,7 +103,33 @@ if __name__ == "__main__":
         print "python ./client_stub.py -[pfbu]"
         print "-p play, -f forward, -b backward, -u pause"
         sys.exit()
-
+    print "getting master"
+    REPLICA_IP_ADDRS = []
+    with open(REPLICA_IP_FILE, "r") as f:
+        for ip_addr in f:
+            REPLICA_IP_ADDRS.append(ip_addr.strip() + ':' + REPLICA_PORT)
+    url = "http://" + REPLICA_IP_ADDRS[0] + "/master"
+    request = urllib2.Request(url)
+    try:
+        r = urllib2.urlopen(request, timeout=0.5)
+        resp = r.read()
+        if not "None" in resp:
+            MASTER_IP = resp
+    except:
+        print "first replica failed to give master address"
+        url = "http://" + REPLICA_IP_ADDRS[1] + "/master"
+        request = urllib2.Request(url)
+        try:
+            r = urllib2.urlopen(request, timeout=0.5)
+            resp = r.read()
+            if not "None" in resp:
+                MASTER_IP = resp
+        except:
+            pass
+            print "second rep gave no response"
+    
+            
+    print MASTER_IP
     parser = argparse.ArgumentParser(description='Client Stub Nsync.')
     parser.add_argument('-pl', action='store_true', help='play first song')
     parser.add_argument('-pa', action='store_true', help='pause at master offset')
