@@ -5,6 +5,8 @@ import pickle
 import hashlib
 from constants import *
 
+# Contains basic utility functions
+
 def format_rpc_response(success, command, params, msg='', command_epoch=None):
   resp = {'success': success, 'command':command, 'params': params}
   if msg != '':

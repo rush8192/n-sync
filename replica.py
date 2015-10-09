@@ -18,6 +18,7 @@ import collections
 from replica_music_service import ReplicaMusicService
 from election_service import ReplicaElectionService
 
+
 if __name__ == "__main__":    
     # start replica service
     ip_addr = utils.get_ip_addr()

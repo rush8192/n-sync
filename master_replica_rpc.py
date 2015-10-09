@@ -13,6 +13,7 @@ import utils
 from constants import *
 from master_client_listener_service import MasterClientListenerService
 
+
 # Class that handles all master/replica rpcs
 # usage (also read init method comment below to see args):
 # r = RPC(self, "play", "192.168.1.138:5000", "http://192.168.1.138:5000/play")

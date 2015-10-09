@@ -11,13 +11,13 @@ import os
 import utils
 from constants import *
 
+# Allows a replica to recover from a failure by getting state from master 
 class MasterReplicaRecoveryService(multiprocessing.Process):
     def __init__(self, ip):
         multiprocessing.Process.__init__(self)
         self._ip = ip
 
     def recover_replica(self):
-        print "RECOVERING FUCKING REPLICA"
         data = utils.unserialize_response(request.get_data())
         replica_song_hashes = data['song_hashes']
         with open(PLAYLIST_STATE_FILE, 'r') as f:

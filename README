@@ -1,0 +1,14 @@
+CS 244B: Distributed Systems Autumn 2014
+Final Project
+
+NSync: Distributed, synchronized music player that uses consensus
+and the Berkeley Time Algorithm to acheive a high degree of accuracy.
+Clients select a series of songs to be played and send PLAY, PAUSE,
+FORWARD, and BACKWARD commands.
+
+Designed to smoothly handle n failures in a cluster with (2n+1) nodes.
+Implemented as several different flask services: master, client, and
+recovery.
+
+Also provides client the ability to replicate mp3 files to different nodes, so
+the client can provide additional music files on the fly.
